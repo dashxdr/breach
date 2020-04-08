@@ -1,0 +1,341 @@
+For additional information, see the DOCS file.
+
+CONVERTING GRAPHICS
+All the graphics used in the game is in the directory new/sammyart. The
+pictures are IFF lowres 16 color. The page size may be anything, not just
+320x200. In the new/sammyart directory, there is a file mr, which will make
+the graphics data resource that gets placed into the Sega's memory. For the
+format of the resource file, see the DOCS file, under MR.
+
+CONVERTING SOUNDS
+Music is made with the MUSICEDITOR program. The DOCS file describes how to
+use it. Music files are converted to the final form with the MUSICCONVERT
+program, also described in the DOCS file. The 8080 music player in contained
+in the code of Breach (new/b.a)
+
+CONVERTING ORIGINAL LEVELS
+new/lc is the level converter. new/lc.a is its source. It works as follows:
+1> lc INPUTAMIGALEVEL OUTPUTSEGALEVEL
+example:
+1> lc /real/river.b2s ram:river
+
+The program takes an original breach compressed level, and converts it to
+the format used in Sega Breach. It can now be edited with new/ledit. Source
+to the ledit program is ledit.a.
+
+Ledit cannot change victory conditions. The victory conditions carry over from
+the original Amiga levels. Ledit can:
+   Edit the background terrain. This must be done because walls are no
+      longer diagonal. In converting levels, I have had to turn diamond
+      shaped rooms into box shaped rooms. Note that LC maps doors into
+      interior tiles.
+   Determine what each commando is carrying. Enemies can "carry" stuff, but
+      right now they don't use it. Enemy commandos each have a smoke grenade,
+      a grenade, and a lazer rifle. They have infinite ammo. Their inventory
+      is kept with bits in their "thing" structure, in new/b.a.
+      From ledit, you can hold the shift key down then click the mouse on
+      any commando, and his inventory will pop up. Clicking in the upper half
+      will remove an item from his inventory. Clicking in the lower half will
+      add that item to his inventory. To exit, click on either an object or
+      a background tile.
+   Place and remove objects.
+   Clicking the right mouse button is ERASE, left is PUT.
+TO USE:
+1> ledit LEVELNAME
+example:
+1> ledit ram:river
+
+    Scroll around with the arrow keys.
+    Go up and down levels with the + and - keys.
+    Fill the entire level with the current fill type with shift f. THERE IS
+      NO UNDO.
+    Edit background tiles by clicking on the tile type in the right hand
+      column. Edit objects by clicking on the object type in the second to
+      right hand column. Edit inventory of commandos by clicking on a commando
+      in the second from the right hand column.
+    Save by hitting S. Load from last saved version with L.
+    Scroll the object and terrain types up and down with the DEL and HELP keys.
+    Commandos and enemies are placed as "objects". Scroll far down to see all
+      the types.
+
+NOTE: ledit needs the file "array" to be present in the current directory.
+      this file contains all the artwork used. array is of the following
+      structure:
+      65536 words, each corresponding to an 8x8 tile. Upper two bits of each
+	word tell which color table to use
+      64 words, each corresponding to a color table value. There are four
+	color tables, each with 16 entries.
+      1 word, telling the number of tiles
+      32*# bytes, each representing a tile. Each tile has 8 bytes for plane0,
+	8 bytes for plane1, 8 bytes for plane2, 8 bytes for plane3
+The graphics all used to be in this format, and the program TER was used to
+edit them. My artist never used TER. Instead he used DPAINT, so I came up with
+the resource method, using sammyart/MR to produce a data file. Unfortunately
+I didn't bother to fix LEDIT to use the new format. Instead it uses the old
+data file.
+
+
+SEGA BREACH LEVEL STRUCTURE:
+;transporter
+	init	0
+	byte	tp_x
+	byte	tp_y
+	word	tp_floor
+	byte	tp_tox
+	byte	tp_toy
+	word	tp_tofloor
+	label	tp_size
+
+maxobjectsin:	equ	150
+maxobjects:	equ	150
+;object
+	init	0
+	byte	o_x
+	byte	o_y
+	byte	o_owner	;id
+	byte	o_what
+	word	o_floor
+	label	o_size
+;notes on object structure:
+;if x<0, the object isn't being used.
+;if o_what is between characters and endch (as defined by equates in new/b.a)
+;then the object is a "thing," not an object.
+;if the object structure contains a thing, then o_owner contains a unique ID
+;byte.
+;if the object structure contains an object, then o_owner contains 0 if it
+;is somewhere in the scenario (o_x, o_y, and o_floor tell where), or the ID
+;of the owner if a "thing" is carrying it.
+;o_floor contains the floor number. It is in units of edge*edge, or 2500. Thus
+;level 0 would be 0, level 1 would be 2500, level 2 would be 5000, etc.
+
+;level
+brieflen:	equ	540
+	init	0
+	struct	l_levels,edge*edge*5
+	word	l_floor
+	word	l_xpos
+	word	l_ypos
+	word	l_tileoff
+	word	l_tile
+	word	l_obj
+	word	l_guy
+	mds	l_extra,16
+	struct	l_objects,maxobjectsin*o_size
+	struct	l_transporters,10*tp_size
+	struct	l_brief,brieflen
+	mds	l_vcond,1
+	mds	l_killpercent,1
+	mds	l_timelimit,2
+	mds	l_occupynumber,2
+	label	l_size
+
+;level notes:
+;l_levels contains the background data. It is ordered to right, top to bottom,
+low levels to high levels. Thus the background byte can be computed with
+x + y*50 + level*2500
+;l_floor, l_xpos, l_ypos, l_tileoff, l_tile, l_obj, l_guy, l_extra is all
+;data used by ledit. It is unused by the breach code.
+;l_objects contain all the objects and things. things are commandos and enemies.
+;see the object structure above. Currently there is a max of 150 objects.
+;l_brief contains the brief text.
+;l_vcond contains victory bits for all the victory types.
+;l_killpercent and l_occupynumber contain bytes for those values.
+;l_timelimit holds the number of seconds allowed for the mission. Currently
+;the game doesn't check overrun.
+
+In order to change this structure, you must change it in three places: in
+lc.a (the program that converts existing Amiga levels to Sega levels), in
+ledit.a (the level editor for Sega levels), and in
+b.a (the source to the game).
+
+Currently the structure contains a lot of slop. For example, most missions
+do not define all 5 levels. Lots of them have only one level defined. Thus
+12,500 bytes are used when you can get by with 2,500. Also there is no
+compression. Also 150 object spaces are used, even if fewer objects are
+actually used. I was working on fixing these problems. I was going to have a
+levelpick byte. This byte would have a 1 bit for the corresponding floor, if
+it needs to be defined in a 50x50 byte array. Otherwise it's zero. Most of
+the size of each mission file comes from the background square definitions
+(12,500 bytes). Next I was going to have a word telling the number of
+objects used, followed by each object. Thus instead of a fixed size structure,
+the structure can change, to be smaller when useful.
+
+To do this, I would suggest the following:  Leave LC.a and ledit.a the same.
+Thus you can convert a level, then touch it up with ledit until you are
+satisfied with it. Next have another converter program that takes a ledit
+output file and converts into the above mentioned variable length format.
+Then you modify b.a to make use of this new format. You would have to change
+the realarray: routine in new/b.a. That routine takes a ledit data file and
+sets up the structures in memory for playing the mission.
+
+NOTE THAT the file new/levels/shrink.a contains the code to do this type of
+"compression."
+
+Something like this has to be done, because to fit 30 levels as they are right
+now would be too much memory. 
+
+NOTE that lots of information is thrown away at the LC stage. I don't save the
+statistics from the original levels, such as accuracy, cracking ability,
+movement points, etc. Currently breach takes none of this into account.
+Perhaps you can have another type of structure, that describes the 9
+commandos in each mission, and tack it onto the end of the mission structure.
+LC places the commandos in the upper left corner of floor #0. There should
+only be 9. If there are more than 9, I think the rest are ignored. They can
+be "placed" anywhere, but they cannot be "moved". Erasing a commando also
+throws away all his inventory. As in the original breach, the commandos
+enter the mission one at a time on the entry square. It was an idea to place
+them around the entry square, so they all appear at once, but this was never
+really done.
+
+
+DESCRIPTION OF BREACH CODE
+new/b.a contains all the code for Sega breach. See the DOCS file for the
+description of the ;#sload commands. This will tell you what is being sent
+over to the Sega, assuming you are not using my development system.
+
+Structures:
+The thing structure is used internally for handling all movable entities.
+In the realarray: routine, object structures are brought in from the input
+level and converted to the internal object and thing structures. Thing
+structures have various bits describing them. The thing structure can be
+added to easily, simply by adding fields. Thus accuracy and other stats can
+be added. The question is where does the data come from? Currently it is
+thrown away in the LC stage. Note that the cursor is actually a thing
+structure.
+
+
+Description of various routines:
+
+initbb	This routine initializes the bbram. Note that this routine
+	is pretty much useless now. Battery backed ram can be either
+	512 bytes or 8K. The original specs for Sega breach demanded
+	4 saved game positions. Since storing all the local variables
+	would take about 12k, there isn't enough ram to store even
+	one position. Probably the best solution is to either have
+	no bbram, or store only the squad leaders, and not allow the
+	player to save a game in progress. Otherwise you may try to
+	come up with some method of compressing 12K into less than
+	8k.
+verifybb:	Test the integrity of the battery backed ram. The Z flag
+	tells whether the BBRAM is ok.
+fixbb	Set the checksum on the BBRAM.
+mission	Code for selecting mission stuff. This has been replaced
+	with the password type deal. Theoretically, after each
+	successful completion of a level, you get a new password,
+	which allows you to go onto the next. The old code would
+	let you select the squad leader, the mission, and you could
+	save the scenario. That code begins a little before
+	missionback: . You can comment out code from mission to a
+	little before missionback, and see what it used to be like.
+sprites	This routine looks at the thing structures, the smokelist
+	and smokenum, animlist and animnum, and creates the sprite
+	data table. This routine handles all the allocation and
+	de-allocation of sprite image data.
+checkvictory	given the victorybits, check if player has either won the
+	mission, hasn't won, or cannot possibly win
+drown	this routine checks to see what players are over water with
+	gravshoes at the end of a round. If there any, they are killed.
+doenemies	this routine goes through the list of things and finds all
+	active enemies, and calls their respective handler routines.
+findtarget	this routine finds the nearest marine within a specified
+	limit to the current enemy. It returns a direction which
+	heads towards the marine. The routine is stupid, in that it
+	won't search around obstacles, and the path will try to
+	go through impassable terrain.
+showwhat	this handles the extended commands, putting the little text
+	in the upper left corner. For example, if you do a TAKE, the
+	word TAKE will appear.
+clearwhat	clears out after showwhat
+addsmoke	adds a smoke element onto current list of smokes. there is
+	no duplication. Smoke lasts only to the next round--marine
+	smoke lasts into the enemy round, enemy smoke lasts into the
+	marine round. Currently enemies ignore smoke. Its effect on
+	the player is to just make it impossible to see anything when
+	in it.
+fixsmoke	age the smokes 1 step. smoke lasts for two calls to fixsmoke
+	after addsmoke.
+putsprites	This routine takes the sprite data table and sends it over
+	to the graphics chip, in the sprite control block. NOTE that
+	no actual tiles are sent over--they must have been sent over
+	somewhere before.
+putsprites2	is the same as putsprites, except it sends over the cursor
+	tiles as well.
+sendfig1,sendfig2, sendfig3
+	These routines send to the graphics memory a 3x3 tile block
+	from the corresponding graphics file. d2 is the X position
+	in 8x8 tiles, and d3 is the Y position in 8x8 tiles. The
+	routine assumes that the address to write to has already been
+	set.
+	The graphics is stored in the sammyart/gfx file, which is
+	made with the sammyart/mr routine, from the sammyart/gfx.par
+	file. CD to sammyart, then do 1> mr gfx.
+	See the DOCS file under MR to understand how this works.
+	The bottom line is sendfig1 sends over objects, sendfig2
+	sends over monsters, sendfig3 sends over goodandbadguys.
+fixthings	This routine looks at all the thing structures, decides which
+	ones are visible (if the th_fig contains something other
+	than -1, the routine will assume the thing is visible) and
+	will send over the 3x3 group of tiles to describe the figure.
+	The th_fig values are set in the sprites routine. So after
+	all the thing structures are initialized in realarray:,
+	the sprites: routine determines what things are visible and
+	assigns them a th_fig value. Putsprites: sends the sprite
+	data block over, and fixthings: sends over their image data.
+dotank, dowedgel, dobiped
+	These routines are the "AI" for those enemies. NOTE the
+	reason for the sound problem is that the different monsters
+	have the same handler routine.
+docommando
+	This handles the commandos. Note that the original AI isn't
+	used at all. All the enemies currently head straight for the
+	nearest good guy and attack. Commandos get within 4 squares,
+	then throw a grenade, throw a smokebomb, then shoot their
+	rifle. They will keep attacking as long as they have movement
+	points. They only have one grenade and smokebomb, but have
+	unlimited ammo. There are bits representing whether they have
+	used their grenade and smokebombs. In the original game they
+	will run up, attack, then run away.
+putinfo	This puts the data into the little info box in the upper right.
+	Graphics are arranged as follows: A plane contains the
+	background tiles. B plane contains the objects, so they appear
+	in front of the background. All moving figures (things) are
+	done with sprites. Smoke is done with sprites. Text is done
+	by replacing the B plane with text instead of objects. The
+	alltext array contains words. 0 means "transparent", and non
+	zero means use this word instead of what would have been
+	used to display objects.
+show, pshow	show: sets up the A plane tile pointers, the B plane pointers,
+	and sets up the info box. pshow does the same, except all
+	registers are saved and restored. XPOS and YPOS and FLOOR
+	determine where to display.
+scroll, pscroll	scroll: does everything. It sets up sprites, sends them over,
+	then goes to show. pscroll: is the same, except all registers
+	are saved and restores.
+setup	This sends over all the Sega register data for setting up the
+	display.
+routine	This is the vertical blank interrupt routine. It handles the
+	beeping.
+
+rnd	returns a random number in d0. it is currently only called
+	in the routine hurtent:
+hurtent	do damage to an entity.
+	If the entity is carrying a shield, all damage is cut in half.
+	otherwise damage is between 1/2 d0 and d0. Thus if d0 is 50,
+	possible damage will be between 25 and 50. If the entity is
+	killed and is a man (good guy), you hear a scream, and
+	everything about him is thrown away.
+error#	These handle error messages. You can add additional messages
+	and errors.
+movelp	the main loop of the game
+pick	pop up a box, and allow the user to select a line.
+makebox	Only one box can be open at a time, because they all use the
+	textbox(a5) storage area. makebox: converts input text into
+	a box, with the nice perimeter. See the sammyart/text graphics
+	file for text tiles. Lower case letters abcdefghi represent
+	the border tiles for boxes.
+tmap9	tile map. contains X and Y positions for all the background
+	tiles. These coordinates are in 8x8 tiles. See the
+	sammyart/background file. 3,3 would correspond to pixel pos
+	24,24. Set Dpaint to originUL, and divide coordinates by 8.
+omap9	object map. Works like tmap9, except it contains all the
+	object coordinates out of sammyart/objects

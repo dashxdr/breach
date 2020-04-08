@@ -1,0 +1,92 @@
+0       Heavy Wall
+1       Thin Wall
+2       Up Shaft
+3       Down Shaft
+4       Power Door
+5       Steel Door
+6       Glass Door
+7       Open Door
+8       Table
+9       Chair
+10      Controls
+11      Dresser
+12      Bed
+13      Terminal
+14      Machine
+15      Transporter
+16      Fuel Tank
+17      Computer
+18      Worker
+19      Lockers
+20      Blank
+21      Metal Floor
+22      Plain Floor
+23      Deep Water
+24      Shallow Water
+25      Dirt/Water
+26      Grade
+27      High Terrain
+28      Dirt
+29      Grass
+30      Foxhole
+31      Light Veg
+32      Jungle
+33      Forest
+34      Entry
+35      Exit
+36      Occupation
+37      DataPack
+38      Prisoner
+39      Launcher
+40      Smoke Grenade
+41      Shield
+42      GravShoes
+43      Neutron Bomb
+44      Camo Suit
+45      Laser Pistol
+46      Laser Rifle
+47      Stun Pistol
+48      Crack Unit
+49      Detector
+50      MediKit
+51      Ammo Pack
+52      Prox Charge
+53      Tablet
+54      Foxhole Maker
+55      Rocket
+56      Grenade
+57      Remote Charge
+58      Beast
+59      Marauder
+60      Alien
+61      Terradon
+62      Gun Emplacement
+63      Wadgel
+64      Tank
+65      Robot
+66      Biped
+67      Seeker
+68      Stun Field
+69      Rubble
+
+0       DataPack
+1       Prisoner
+2       Launcher
+3       Smoke Grenade
+4       Shield
+5       GravShoes
+6       Neutron Bomb
+7       Camo Suit
+8       Laser Pistol
+9       Laser Rifle
+10      Stun Pistol
+11      Crack Unit
+12      Detector
+13      MediKit
+14      Ammo Pack
+15      Prox Charge
+16      Tablet
+17      Foxhole Maker
+18      Rocket
+19      Grenade
+20      Remote Charge

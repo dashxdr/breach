@@ -1,0 +1,295 @@
+DOCS
+	Doc file that is included with development system. Describes
+	MR, MUSICEDITOR, MUSICCONVERT
+musiceditor
+	use to edit music files. Communicates with the Sega board.
+musicconvert
+	use to convert musiceditor files to data files used by the
+	8080 music player
+new/b.a
+	Source code to Sega Breach
+TER
+	use to look at the new/array file, which is used by the
+	new/ledit program and nowhere else
+new/arrayold2
+new/arrayold
+new/new-24x24-set
+new/arraynew4
+new/array
+new/ARRAY2
+new/ARRAY1
+new/arraynew5
+new/arraynew3
+new/array45
+new/arraynew2
+	throwback to previous method of storing graphics. Can be
+	viewed with TER.
+new/ledit.a
+new/ledit
+	source and executable of the level editor
+new/testlevel
+new/testlevel2
+	test levels which are probably obsolete
+new/ld.a
+new/ld
+	level dump program. This dumps information from the original
+	Amiga breach level. Use 1> ld /real/river.b2s
+new/lc.a
+new/lc
+	level convert program. This converts Amiga breach levels to
+	Sega breach levels.
+new/objlist
+	description of background tiles and objects. Walls are actually
+	tiles greater than 128, because there are 16 of each, depending
+	on whether there are connections up, down, left and right.
+new/tempp.a
+	I'm not sure what this is. I think it's an old version of
+	ledit. Can be ignored.
+new/songs/bsongs.arc
+	Version #1 of all four songs, directly from Dan. Need to be
+	fixed so the Play Song works.
+new/songs/music.arc
+	Version #2 of two songs.
+new/songs/fail1
+new/songs/promo1
+new/songs/success1
+new/songs/title1
+new/songs/t1
+new/songs/f1
+new/songs/p1
+new/songs/s1
+	All the songs for breach. fail1, promo1, success1, and title1
+	are used with musiceditor. They are converted to f1, p1, s1
+	and t1 with musicconvert.
+new/anims/A-ship-18.anim
+new/anims/ManStuff14.pic
+new/anims/Reward.anim
+new/anims/shipside07.pic
+new/anims/WallFall4.anim
+new/anims/flame.anim
+new/anims/SHIP-LAND09.pic
+new/anims/Landing01.anim
+new/anims/dead-31.anim
+new/anims/Boss16.pic
+new/anims/MAN-01d2-7.pic
+new/anims/land-10.pic
+new/anims/ShipInt-06.pic
+new/anims/ManStuff15.pic
+new/anims/A-ship-17.anim
+new/anims/hands5.pic
+new/anims/Landing02.anim
+new/anims/MAN-01d2-6.br
+new/anims/Control09.pic
+new/anims/ManStuff16.pic
+	All the artwork for the animations. There is no animation
+	code written so far. I had planned to write a simple script
+	processor, that would let you place pieces of art onto the
+	A and B planes, then let you scroll them around.
+new/sammyart/pic4
+new/sammyart/pic3
+new/sammyart/pic2
+new/sammyart/pic1
+new/sammyart/pics.par
+	some of the pictures used for final animations. This
+	was to see how big the final graphics would be. Not used
+	currently.
+new/sammyart/text2
+new/sammyart/text3
+new/sammyart/segadata
+new/sammyart/segalogo
+new/sammyart/title
+new/sammyart/breach
+new/sammyart/treco1
+new/sammyart/treco2
+new/sammyart/treco3
+new/sammyart/treco4
+new/sammyart/background
+new/sammyart/objects
+new/sammyart/text
+new/sammyart/GoodAndBadGuys
+new/sammyart/Monsters
+new/sammyart/gfx.par
+new/sammyart/gfx
+	parameter file and data file for all the breach graphics
+	Also all the graphics files. Some are not used. Look at
+	gfx.par. Only listed files are used.
+new/sammyart/mr.a
+new/sammyart/mr
+	resource maker. takes the gfx.par file and makes gfx
+new/sammyart/comp/mrt.a
+new/sammyart/comp/mrt
+new/sammyart/comp/fix.a
+new/sammyart/comp/fix
+new/sammyart/comp/NOTES
+	test files for seeing what compression methods would help
+	reduce size. Take in data file produced with mrt. Mrt works
+	exactly like mr, except it produces only tile data. The
+	tile data allows experiments on compression methods.
+new/art/A-ship-18.anim
+new/art/ShipInt-05.pic
+new/art/runner.abr
+new/art/Reward.anim
+new/art/exit-04.pic
+new/art/shipside07.pic
+new/art/flame.anim
+new/art/exit-06.anim
+new/art/SHIP-LAND09.pic
+new/art/Landing01.anim
+new/art/defense12.pic
+new/art/guys3.pic.info
+new/art/dead-31.anim
+new/art/jumper05.anim
+new/art/Boss16.pic
+new/art/MAN-01d2-7.pic
+new/art/land-10.pic
+new/art/ShipInt-06.pic
+new/art/guys3.pic
+new/art/hands5.pic
+new/art/Landing02.anim
+new/art/title06
+new/art/Control09.pic
+new/art/WallFall7.anim
+new/art/T-up-4.anim
+new/art/ManStuff16.pic
+	Some more artwork. This may be redundant with the /anims
+	directory
+new/samples
+	Ascii text file showing possible better format for mission
+	selection screen
+new/sounddata
+	All the sound effects used in the program. Is of the form:
+	word   # of sounds following
+	;each sound is of this form:
+	word samplerate	;this is ignored
+	long samplesize	;# of bytes of this sample
+	byte samples[samplesize]
+new/sd2
+	Sounddata, made by throwing every other byte away. This
+	lowers sound quality some, but cuts size by 1/2.
+new/fix.a
+new/fix
+	Takes amiga breach levels and uncompresses them. This is
+	the basis for several other programs.
+new/graphics/Boss13.pic
+new/graphics/Boss03.pic
+new/graphics/Control09.pic
+new/graphics/Man-05.pic
+new/graphics/allgfx
+new/graphics/samplepic
+new/graphics/brush1
+new/graphics/brush2
+new/graphics/brush3
+new/graphics/camosuit.br
+new/graphics/Enemy-As.br
+new/graphics/Enemy-A.br
+new/graphics/EnemyA2.br
+new/graphics/EnemyB.br
+new/graphics/EnemyC.br
+new/graphics/b1
+new/graphics/b2
+	Some more graphics files. These can probably be ignored
+new/levels/river
+new/levels/admiral
+new/levels/post
+new/levels/comm
+new/levels/lion
+new/levels/crashed
+new/levels/hostage
+new/levels/quarters
+new/levels/rescue
+new/levels/landing
+	All the Amiga levels that have been converted so far. Use
+	LC, then LEDIT.
+new/levels/shrink.a
+new/levels/shrink
+	program to shrink levels, for a sort of compression. Adds a
+	planepick byte which tells which 50x50 levels to define, and
+	also an objectnum, so only as many objects need to be placed
+	as are required. This alone does some pretty good compression.
+	See the README file.
+new/levels/temp/admiral
+new/levels/temp/river
+new/levels/temp/landing
+new/levels/temp/rescue
+new/levels/temp/quarters
+new/levels/temp/hostage
+new/levels/temp/crashed
+new/levels/temp/lion
+new/levels/temp/comm
+new/levels/temp/post
+	backups of converted levels. Some of the /new/levels levels
+	have been modified, and these levels serve as a beginning.
+amigacode/breach2.c
+amigacode/breach2.h
+amigacode/breach25.c
+amigacode/b23e.gif
+amigacode/breach28.c
+amigacode/B22E.GIF
+amigacode/breach2b.c
+amigacode/breach24.c
+amigacode/breach2a.c
+amigacode/B20E.GIF
+amigacode/breach26.c
+amigacode/breach29.c
+amigacode/breach22.c
+amigacode/breach2c.c
+amigacode/b24e.gif
+amigacode/makefile
+amigacode/breach2s.h
+amigacode/LOGOE.GIF
+amigacode/B21E.GIF
+amigacode/breach27.c
+amigacode/breach20.c
+amigacode/breach23.c
+amigacode/breach2d.c
+amigacode/B25E.GIF
+amigacode/B20E.LBM
+amigacode/B21E.LBM
+amigacode/B22E.LBM
+amigacode/B25E.LBM
+amigacode/B24E.LBM
+amigacode/LOGOE.LBM
+amigacode/test
+amigacode/B23E.LBM
+	Amiga source code and graphics files. Use these as reference.
+real/SMITH.b2l
+real/SMITH.b2l.info
+real/IVAN.b2l
+real/IVAN.b2l.info
+real/c/endcli
+real/c/LoadWB
+real/devs/MountList
+real/devs/system-configuration
+real/l/Disk-Validator
+real/libs/icon.library
+real/libs/version.library
+real/s/startup-sequence
+real/ADMIRAL.b2s
+real/ALIENS.b2s
+real/Breach2
+real/Breach2.dat
+real/Breach2.ins
+real/Breach2.mus
+real/Builder
+real/COMM.b2s
+real/CRASHED.b2s
+real/DOORS.b2s
+real/FIRST.b2s
+real/HILL.b2s
+real/HOSTAGE.b2s
+real/LANDING.b2s
+real/LION.b2s
+real/POST.b2s
+real/QUARTERS.b2s
+real/RESCUE.b2s
+real/RIVER.b2s
+real/SEEKER.b2s
+real/CLYDE.b2l
+real/CLYDE.b2l.info
+real/CCC.b2g
+real/CCC.b2g.info
+real/TESTSCEN.b2s
+real/TESTSCEN.b2s.info
+	Copy of Amiga breach, so you can run the game to try things
+	out.
+README

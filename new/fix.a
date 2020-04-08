@@ -1,0 +1,231 @@
+;#test	c:debug ram:test in ram:out
+;#end
+;this program takes a breach 2 saved game file and uncompresses it
+
+
+
+buffersize:	equ	512
+
+
+	init	0
+	nds	pointer,4
+	nds	length,4
+	nds	ihand,4
+	nds	ohand,4
+	nds	ibuff,buffersize
+	nds	icount,2
+	nds	ipoint,4
+	nds	obuff,buffersize
+	nds	ocount,2
+	nds	opoint,4
+	nds	xpos,2
+	nds	word1,64
+	nds	word2,64
+	nds	xlate,8
+	nds	spsave,4
+	label	workspace
+
+	link	a5,#workspace
+	move.l	a0,pointer(a5)
+	move.l	d0,length(a5)
+
+	move.l	4.w,a6
+	lea	dosname(pc),a1
+	moveq	#0,d0
+	jsr	exopenlibrary(a6)
+	move.l	d0,a6
+	bsr.s	fix
+	move.l	a6,a1
+	move.l	4.w,a6
+	jsr	excloselibrary(a6)
+	unlk	a5
+	moveq	#0,d0
+	rts
+
+fix:	move.l	pointer(a5),a4
+	lea	word1(a5),a0
+	bsr	token
+	lea	word2(a5),a0
+	bsr	token
+	lea	word1(a5),a0
+	move.l	a0,d1
+	move.l	#1005,d2
+	jsr	dosopen(a6)
+	move.l	d0,ihand(a5)
+	beq	exit
+	lea	word2(a5),a0
+	move.l	a0,d1
+	move.l	#1006,d2
+	jsr	dosopen(a6)
+	move.l	d0,ohand(a5)
+	beq	exit2
+	bsr	init
+	move.l	a7,spsave(a5)
+	moveq	#21,d4
+toss:	bsr	ci
+	subq	#1,d4
+	bne.s	toss
+	moveq	#0,d4
+fix1:	bsr	ci
+	cmpi.b	#7,d0
+	beq.s	is7
+	lea	xlate(a5),a0
+	ext	d0
+	move.b	d4,0(a0,d0)
+is7:	addq.b	#1,d4
+	bne.s	fix1
+	moveq	#0,d7
+fixo:	moveq	#0,d5
+fix2:	bsr	getbit
+	bcs.s	exitf2
+	addq	#1,d5
+	cmpi.b	#7,d5
+	bne.s	fix2
+	bsr	getbyte
+	bsr	co
+	bra.s	fixo
+exitf2:	lea	xlate(a5),a0
+	move.b	0(a0,d5),d0
+	bsr	co
+	bra.s	fixo
+
+
+
+getbyte:	moveq	#8,d4
+getbytelp:	bsr	getbit
+	roxr.b	#1,d1
+	subq	#1,d4
+	bne.s	getbytelp
+	move.b	d1,d0
+	rts
+
+getbit:	subq	#1,d7
+	bcc.s	gotbit
+	bsr	ci
+	move.b	d0,d6
+	moveq	#7,d7
+gotbit:	roxr.b	#1,d6
+	rts
+
+closeupshop:	move.l	spsave(a5),a7
+	bsr	flush
+	move.l	ohand(a5),d1
+	jsr	dosclose(a6)
+exit2:	move.l	ihand(a5),d1
+	jsr	dosclose(a6)
+exit:	rts
+hexout:	move	d0,d1
+	ror.b	#4,d0
+	bsr.s	digit
+	move	d1,d0
+digit:	andi	#$f,d0
+	move.b	digits(pc,d0),d0
+	bra	co
+digits:	dc.b	'0123456789ABCDEF'
+hexcomp:	moveq	#0,d0
+hexcomplp:	move.b	(a0)+,d1
+	subi.b	#'0',d1
+	bcs.s	hexcompdone
+	cmpi.b	#10,d1
+	bcs.s	decdigit
+	subi.b	#'a'-'0'-10,d1
+	cmpi.b	#10,d1
+	bcs.s	hexcompdone
+	cmpi.b	#16,d1
+	bcc.s	hexcompdone
+decdigit:	lsl.l	#4,d0
+	or.b	d1,d0
+	bra.s	hexcomplp
+hexcompdone:	rts
+
+init:	lea	obuff(a5),a0
+	move.l	a0,opoint(a5)
+	clr	ocount(a5)
+	clr	icount(a5)
+	rts
+ci4:	bsr.s	ci2
+	swap	d0
+ci2:	bsr.s	ci
+	rol	#8,d0
+ci:	tst	icount(a5)
+	bne.s	stillmorein
+	movem.l	d0-d3,-(a7)
+	move.l	ihand(a5),d1
+	lea	ibuff(a5),a0
+	move.l	a0,ipoint(a5)
+	move.l	a0,d2
+	move.l	#buffersize,d3
+	jsr	dosread(a6)
+	move	d0,icount(a5)
+	beq.s	exitci
+	movem.l	(a7)+,d0-d3
+stillmorein:	subq	#1,icount(a5)
+	move.l	ipoint(a5),a0
+	move.b	(a0)+,d0
+	move.l	a0,ipoint(a5)
+	rts
+exitci:	movem.l	(a7)+,d0-d3
+	bra	closeupshop
+co4:	swap	d0
+	bsr.s	co2
+	swap	d0
+co2:	rol	#8,d0
+	bsr.s	co
+	rol	#8,d0
+co:	cmpi	#buffersize,ocount(a5)
+	bne.s	stillnotfull
+	bsr.s	flush
+stillnotfull:	move.l	opoint(a5),a0
+	move.b	d0,(a0)+
+	move.l	a0,opoint(a5)
+	addq	#1,ocount(a5)
+	rts
+
+flush:	movem.l	d0-d3,-(a7)
+	move.l	ohand(a5),d1
+	lea	obuff(a5),a0
+	move.l	a0,opoint(a5)
+	move.l	a0,d2
+	move	ocount(a5),d3
+	clr	ocount(a5)
+	ext.l	d3
+	jsr	doswrite(a6)
+	movem.l	(a7)+,d0-d3
+	rts
+
+;a4=point,store at a0
+token:	move.b	(a4)+,d0
+	cmpi.b	#' ',d0
+	beq.s	token
+	cmpi.b	#9,d0
+	beq.s	token
+	subq	#1,a4
+	moveq	#60,d2
+tokenlp:	move.b	(a4)+,d0
+	beq.s	tokendone
+	cmpi.b	#' ',d0
+	beq.s	tokendone
+	cmpi.b	#9,d0
+	beq.s	tokendone
+	cmpi.b	#10,d0
+	beq.s	tokendone
+	subq	#1,d2
+	bmi.s	tokenlp
+	move.b	d0,(a0)+
+	bra.s	tokenlp
+tokendone:	clr.b	(a0)+
+	subq	#1,a4
+	rts
+messagelp:	bsr	co
+message:	move.b	(a2)+,d0
+	bne.s	messagelp
+	rts
+
+dosname:	dc.b	'dos.library',0
+
+exopenlibrary:	equ	$fffffdd8
+excloselibrary:	equ	$fffffe62
+dosopen:	equ	$ffffffe2
+dosclose:	equ	$ffffffdc
+dosread:	equ	$ffffffd6
+doswrite:	equ	$ffffffd0

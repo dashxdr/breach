@@ -1,0 +1,6536 @@
+;#target	0
+;#pc	100
+;#a7	0
+;#options
+;;#read	ram:save,0,64c3a	;5539a
+;#sload	sammyart/gfx	;cd sammyart;mr gfx
+;#sload	sounddata	;sd2
+;#sload	songs/t1
+;#sload	songs/f1
+;#sload	songs/s1
+;#sload	songs/p1
+;#sload	levels/river
+;#sload	levels/admiral
+;#sload	levels/post
+;#sload	levels/comm
+;#sload	levels/lion
+;#sload	levels/crashed
+;#sload	levels/hostage
+;#sload	levels/quarters
+;#sload	levels/rescue
+;#sload	levels/landing
+;#end
+numsongs:	equ	4
+numlevels:	equ	10
+maxmoves:	equ	20
+
+;Object rules:
+;if floor>0, object is used and is located somewhere
+;if floor<0 and owner<0, object is not used
+;if floor<0, object is being carried, owner tells who owns
+
+
+;resource, as in the sammyart/gfx
+;long words describing offset from start to the resource
+;each resource:
+;2 bytes # of tiles defined
+;1 byte width of array
+;1 byte height of array
+;16 words of color table
+;width*height words of array
+;tiles
+	init	0
+	mds	res_tiles,2
+	mds	res_width,1
+	mds	res_height,1
+	mds	res_colors,32
+	mds	res_array,0
+
+
+
+;array1:	equ	$4000
+stacksize:	equ	1024
+
+hpgrenade:	equ	70
+hpneutron:	equ	60
+hppistol:	equ	20
+hprifle:	equ	50
+hpstun:	equ	20
+enemyhp:	equ	49	;number of hit points each enemy has
+
+picture:	equ	$1020
+colors:	equ	$1000
+tiles:	equ	1
+vx:	equ	42
+vy:	equ	28
+tvx:	equ	14	;number of 3x3 tiles for viewing area
+tvy:	equ	10
+xmax1:	equ	50-14 ;135-46-vx
+xmax2:	equ	228-139-vx
+ymax1:	equ	50-9 ;59-vy
+ymax2:	equ	59-vy
+
+mapsizex:	equ	31
+mapsizey:	equ	21
+
+
+switchbit:	equ	4	;sets rate of two frame animations
+
+;actions, which indicate what will happen when B is hit
+actmove:	equ	0
+actuse:	equ	1
+acttake:	equ	4
+actdrop:	equ	5
+actdoor:	equ	7
+
+c_datapack:	equ	0
+c_hostage:	equ	1
+c_launcher:	equ	2
+c_shield:	equ	3
+c_gravshoes:	equ	4
+c_neutron:	equ	5
+c_camosuit:	equ	6
+c_pistol:	equ	7
+c_rifle:	equ	8
+c_detector:	equ	11
+c_medkit:	equ	12
+c_ammo:	equ	13
+c_tablet:	equ	15
+c_rocket:	equ	17
+c_grenade:	equ	18
+c_smoke:	equ	21
+
+c_rubble:	equ	5
+
+cost_door:	equ	5
+cost_lift:	equ	6
+cost_grav:	equ	15
+cost_pistol:	equ	4
+cost_launch:	equ	15
+cost_smoke:	equ	8
+cost_tablet:	equ	30	;actually gets added
+cost_grenade:	equ	8
+cost_neutron:	equ	8
+cost_rifle:	equ	6
+cost_reload:	equ	5
+cost_medkit:	equ	8
+healthmedkit:	equ	60
+maxammo:	equ	25
+ammoperpack:	equ	15
+rifleammo:	equ	3
+pistolammo:	equ	1
+stunammo:	equ	2
+gunmp:	equ	12
+maraudermp:	equ	20
+wedgelmp:	equ	20
+wedgelhurt:	equ	10
+wedgeltime1:	equ	8
+rexmp:	equ	15
+rexhurt:	equ	20
+rextime1:	equ	8
+termp:	equ	25
+terhurt:	equ	10
+tertime1:	equ	10
+
+
+;c000	= A pointers
+;d000-d3ff	= Horizontal scroll table
+;e000	= B pointers
+;8000	= cross hair #1
+;8120	= cross hair #2
+;8240-8b40	= good guys
+startsprites:	equ	$412
+
+;fc00	= sprite table
+;0020-7d00	= tiles for A plane
+;0000	= tile for B plane
+figusedlen:	equ	64
+
+bleft:	equ	2
+bright:	equ	3
+bup:	equ	0
+bdown:	equ	1
+buttonc:	equ	5
+buttonb:	equ	4
+buttona:	equ	6
+buttons:	equ	7
+
+fup:	equ	1<<bup
+fdown:	equ	1<<bdown
+fleft:	equ	1<<bleft
+fright:	equ	1<<bright
+
+xadj:	equ	6	;number of tiles to left of center
+yadj:	equ	4	;number of tiles above center
+
+objnum:	equ	60
+bxsize:	equ	50
+bysize:	equ	50
+maxmen:	equ	10
+edge:	equ	50
+
+
+maxobjectsin:	equ	150
+maxobjects:	equ	150
+;object
+	init	0
+	byte	o_x
+	byte	o_y
+	byte	o_owner	;id
+	byte	o_what
+	word	o_floor
+	label	o_size
+;transporter
+	init	0
+	byte	tp_x
+	byte	tp_y
+	word	tp_floor
+	byte	tp_tox
+	byte	tp_toy
+	word	tp_tofloor
+	label	tp_size
+
+
+;level
+brieflen:	equ	540
+	init	0
+	struct	l_levels,edge*edge*5
+	word	l_floor
+	word	l_xpos
+	word	l_ypos
+	word	l_tileoff
+	word	l_tile
+	word	l_obj
+	word	l_guy
+	mds	l_extra,16
+	struct	l_objects,maxobjectsin*o_size
+	struct	l_transporters,10*tp_size
+;	struct	l_marines,9*mar_size
+	struct	l_brief,brieflen
+	mds	l_vcond,1
+	mds	l_killpercent,1
+	mds	l_timelimit,2
+	mds	l_occupynumber,2
+	label	l_size
+
+;maxobjects:	equ	60
+;;object from saved game
+;	init	0
+;	word	o_x
+;	word	o_y
+;	word	o_what
+;	word	o_floor
+;	label	o_size
+;;level
+;	init	0
+;	struct	l_levels,edge*edge*5
+;	word	l_floor
+;	word	l_xpos
+;	word	l_ypos
+;	word	l_tileoff
+;	word	l_tile
+;	word	l_obj
+;	struct	l_objects,maxobjects*o_size
+;	label	l_size
+
+;object for internal use
+	init	0
+	word	obj_x
+	word	obj_y
+	word	obj_what
+	word	obj_floor
+	word	obj_owner
+	word	obj_info1
+	word	obj_info2
+	word	obj_info3
+	word	obj_info4
+	label	obj_size
+
+
+
+
+;level:	equ	$18000
+clevel:	equ	0
+;	struct	objects,obj_size*objnum
+
+;thing. Can be a man, enemy, monster, or the pointer
+th_used:	equ	0	;1 if this element is used
+th_entity:	equ	1	;1 if living
+th_man:	equ	2	;1 if commando
+th_float:	equ	3	;1 if floating (gravshoes)
+th_exited:	equ	4	;1 if commando has left via an exit square
+
+	init	0
+	word	th_x
+	word	th_y
+	word	th_id
+	word	th_what
+	word	th_flags
+	word	th_fig
+	word	th_floor
+	word	th_direction
+	word	th_health
+	word	th_ammo
+	word	th_moves
+	label	th_size
+numthings:	equ	100
+
+;anim
+	init	0
+	word	an_x
+	word	an_y
+	word	an_fig
+	label	an_size
+
+;current order of things:
+;	8 direction pointer
+;	10 player characters
+
+ix:	equ	42
+ix2:	equ	ix+ix
+iy:	equ	30
+
+;squad leader (as stored in BB ram)
+sl_used:	equ	0
+slnamelen:	equ	8
+	init	0	;each number is 2x what it really is
+	mds	sl_flags,2
+	mds	sl_name,slnamelen*2
+	mds	sl_rank,2
+	init	128
+	label	sl_size
+
+maxsl:	equ	10
+maxsg:	equ	3
+
+bbram:	equ	$80000
+bbsize:	equ	$8000
+sgstart:	equ	bbram+maxsl*sl_size
+
+;saved game flags
+sg_used:	equ	0
+	init	0
+	mds	sg_sgnum,2
+	mds	sg_flags,2
+	mds	sg_mission,2
+	mds	sg_sl,2
+	mds	sg_length,4
+
+
+
+;BB ram storage:
+;	maxsl squad leaders
+;  repeat following maxsg times
+;	1 byte saved game #
+;	1 byte flags
+;	1 byte which mission
+;	1 byte which squad leader
+;	2 byte length
+;	saved game data of length-2 bytes
+;  end
+;	-1
+
+
+
+	init	-$8000
+	mds	password,4
+	mds	clock,2
+	mds	seed,4
+	mds	beeptime,1
+	mds	insmoke,1
+	mds	guy,4
+	mds	xtemp,2
+	mds	ytemp,2
+	mds	xtemp2,2
+	mds	ytemp2,2
+	mds	temp,2
+	mds	tempc,2
+	mds	ent,4
+	mds	ent2,4
+	mds	attacker,4
+	mds	targx,2
+	mds	targy,2
+	mds	mptemp,2
+	mds	cursor,2
+	mds	cpstate,1
+	mds	cpcount,1
+	mds	frame,1
+	mds	blackout,1
+	mds	sounddata,4
+	mds	gfx,4
+	mds	colorsave,128
+	mds	figused,figusedlen
+	mds	textstack,16*4
+	mds	alphas,256*2
+	mds	pos,2
+	mds	songs,64
+
+	mds	display,ix*30*2
+	mds	alltext,ix*28*2
+	mds	textbox,1024
+	mds	scratch,4096
+	mds	scratch2,1024
+	mds	scratch3,256
+;	mds	mmap,256
+	mds	tilemap,18*192
+	mds	objmap,18*64
+	mds	spritedata,8*128
+	mds	endsprites,4
+	mds	exptype,2
+	mds	expoint,4
+	mds	nex,1
+	mds	ney,1
+	mds	enemies1,1
+	mds	occupy1,1
+	mds	hostages1,1
+	mds	hostages2,1
+	mds	datapacks1,1
+	mds	datapacks2,1
+	mds	active1,1
+	mds	xflags,1
+	mds	currentgame,2
+	mds	explodes,4*64
+	mds	stack,stacksize
+	mds	movelist2,2
+	mds	movelist,maxmoves*2	;must be before movenum
+	mds	movenum,2	;must be after movelist
+;save game data follows
+	mds	whichmission,1	;these two are uncompressed
+	mds	whichsquadleader,1
+	label	savestart
+	mds	board,bxsize*bysize*5
+	mds	animnum,2
+	mds	minutes,2
+	mds	hours,2
+	mds	alevel,4
+	mds	flevel,4
+	mds	currentman,2
+	mds	xpos,2
+	mds	ypos,2
+	mds	limitx,2
+	mds	limity,2
+	mds	rdx,2
+	mds	rdy,2
+	mds	cxpos,2
+	mds	cypos,2
+	mds	enterx,2
+	mds	entery,2
+	mds	enterfloor,2
+	mds	floor,2
+	mds	lastused,2
+	mds	lastobjused,2
+	mds	lastusex,2
+	mds	lastusey,2
+	mds	infoshow,2
+	mds	things,th_size*numthings
+	mds	objects,obj_size*maxobjects
+	mds	vcond,1
+	mds	killpercent,1
+	mds	numhostages,1
+	mds	numoccupies,1
+	mds	numdatapacks,1
+	mds	numenemies,1
+	mds	timelimit,2
+	mds	occupynumber,2
+	mds	smokenum,2
+	mds	newsmokes,2
+	mds	smokelist,100*6
+	mds	animlist,32*an_size
+	mds	lastpick,2
+	mds	object,4
+	mds	action,2
+	label	saveend
+;end of saved game data
+
+	label	workspace
+
+
+start:	dc.l	0
+	dc.l	entry-start
+	ds.l	24-2+1
+	dc.l	int1-start
+	dc.l	int2-start
+	dc.l	int3-start
+	dc.l	int4-start
+	dc.l	int5-start
+	dc.l	routine-start
+	ds.l	(256-(*-start))/4
+	dc.b $53, $45, $47, $41
+	ds.l 63
+
+entry:
+	move	#$2700,sr
+
+	lea	$ff8000,a5
+	lea	stack+stacksize(a5),a7
+
+	lea	-$8000(a5),a0
+	move	#$8000+workspace,d0
+clrwork:	clr	(a0)+
+	subq	#2,d0
+	bne.s	clrwork
+
+	move	#$2300,sr
+
+	move.l	#$aabacada,seed(a5)
+	move.l	#'ZAAA',password(a5)
+
+	lea	$c00000,a6
+	bsr	setup
+
+	lea	endprog+4(pc),a0
+	move.l	a0,gfx(a5)
+	adda.l	-4(a0),a0
+	move.l	a0,sounddata(a5)
+	adda.l	-4(a0),a0
+	moveq	#numsongs,d0
+	lea	songs(a5),a1
+savesongs:	move.l	a0,(a1)+
+	adda.l	-4(a0),a0
+	subq	#1,d0
+	bne.s	savesongs
+	move.l	a0,flevel(a5)
+
+	moveq	#numlevels,d0
+findend:	adda.l	-4(a0),a0
+	subq	#1,d0
+	bne.s	findend
+h:
+
+	bsr	initbb
+;	bsr	z80dl
+	bsr	song0
+
+	bsr	blacken
+	moveq	#6,d0
+	bsr	showpic
+	bsr	fadein
+	bsr	wait3
+	bsr	fadeout
+	moveq	#9,d0
+	bsr	showpic
+	bsr	fadein
+	bsr	wait3
+	bsr	fadeout
+	moveq	#7,d0
+	bsr	showpic
+	bsr	fadein
+	bsr	wait3
+	bsr	fadeout
+	bra	mission
+
+fadein:	moveq	#16,d7
+fadeinlp:	bsr	pcolors
+	subq	#1,d7
+	bge.s	fadeinlp
+	rts
+fadeout:	moveq	#0,d7
+fadeoutlp:	bsr	pcolors
+	addq	#1,d7
+	cmpi	#16,d7
+	ble.s	fadeoutlp
+	rts
+blacken:	lea	colorsave(a5),a0
+	moveq	#64,d0
+blackenlp:	clr	(a0)+
+	subq	#1,d0
+	bne.s	blackenlp
+	moveq	#0,d7
+pcolors:	move.l	#$c0000000,4(a6)
+	lea	colorsave(a5),a0
+	moveq	#0,d1
+	lea	scratch+4(a5),a1
+	move	d7,scratch(a5)
+	bpl.s	topcolorslp
+	not	d1
+	neg	scratch(a5)
+topcolorslp:	moveq	#16,d2
+	sub	scratch(a5),d2
+	move	d2,scratch+2(a5)
+	moveq	#64,d6
+pcolorslp:	move	(a0)+,d0
+	rol	#4,d0
+	rol	#4,d1
+	clr	d2
+	bsr.s	range
+	bsr.s	range
+	bsr.s	range
+	move	d2,(a1)+
+	subq	#1,d6
+	bne.s	pcolorslp
+	bsr	vb
+	moveq	#64,d0
+	lea	scratch+4(a5),a0
+pcolorslp2:	move	(a0)+,(a6)
+	subq	#1,d0
+	bne.s	pcolorslp2
+	rts
+range:	rol	#4,d0
+	rol	#4,d1
+	move	d0,d4
+	move	d1,d5
+	andi	#15,d4
+	andi	#15,d5
+	mulu	scratch(a5),d5
+	mulu	scratch+2(a5),d4
+	lsr	#4,d4
+	lsr	#4,d5
+	add	d5,d4
+	rol	#4,d2
+	or	d4,d2
+	rts
+
+movelp:	bsr	checkvictory
+	bsr	setinsmoke
+	beq.s	smokesame
+	bsr	scroll
+smokesame:	moveq	#fup+fdown+fleft+fright,d2	;+1<<buttona+1<<buttonc,d2
+	bsr	cporta
+	bsr	processevent
+	bsr	vb
+	move.b	frame(a5),d0
+	move.b	d0,d1
+	addq	#1,d1
+	move.b	d1,frame(a5)
+	eor.b	d1,d0
+	btst	#switchbit,d0
+	beq.s	movelp
+	bsr	fixthings
+	bsr	smokesprite
+	bra.s	movelp
+
+processevent:	btst	#buttons,d0
+	beq.s	nos
+	not.b	infoshow(a5)
+	beq	show
+	bsr	clearinfo
+	bra	show
+nos:	btst	#buttona,cpstate(a5)
+	beq.s	nohita
+	btst	#buttona,d0
+	beq.s	notfirsta
+	move	d0,-(a7)
+	bsr	abort
+	bsr	crossback
+	move	(a7)+,d0
+notfirsta:	andi	#1<<bleft+1<<bright,d0
+	beq	ignore
+	bsr	beep
+	btst	#bleft,d0
+	bne	nextman
+	bra	prevman
+nohita:	btst	#buttonb,d0
+	beq	no5
+	cmpi	#actmove,action(a5)
+	bne.s	nomenu
+	move	cxpos(a5),d2
+	move	cypos(a5),d3
+	bsr	mantoa2
+	cmp	th_x(a2),d2
+	bne.s	nomenu
+	cmp	th_y(a2),d3
+	beq	domenu
+nomenu:	bsr	beep
+	bsr	limit4
+	move	action(a5),d1
+	move	#actmove,action(a5)
+	cmpi	#actmove,d1
+	beq	moveguy
+	cmpi	#acttake,d1
+	beq	dotake
+	cmpi	#actdrop,d1
+	beq	dodrop
+	cmpi	#actdoor,d1
+	beq	dodoor
+	cmpi	#actuse,d1
+	beq	douse
+	rts
+
+docontinue:	bsr	error25
+	btst	#buttona,d0
+	beq	ignore
+	clr.b	insmoke(a5)
+	bsr	drown
+	bsr	fixsmoke
+
+	bsr	checkvictory
+
+	bsr	nocrosshair
+	bsr	doenemies
+	bsr	fixthings
+
+	bsr	checkvictory
+
+;check if squad leader dead
+	moveq	#10,d0
+	bsr	subtime
+	bsr	initgoods
+	bsr	fixsmoke
+	bsr	thisman
+	move	currentgame(a5),d0
+	bra	savegame
+
+
+;*******************************************************************
+xoff:	equ	8
+messagelp:	bsr.s	write
+message:	move.b	(a0)+,d0
+	bne.s	messagelp
+	rts
+;d0=ascii code
+write:	cmpi.b	#8,d0
+	beq.s	home
+	cmpi.b	#12,d0
+	beq.s	ff
+	cmpi.b	#10,d0
+	beq.s	lf
+	move	pos(a5),4(a6)
+	move	#3,4(a6)
+	addq	#2,pos(a5)
+	andi	#$7f,d0
+	lsl	#1,d0
+	lea	alphas(a5),a1
+	move	0(a1,d0),(a6)
+	lsr	#1,d0
+	rts
+home:	move	#$6000+xoff*2,pos(a5)
+	rts
+ff:	bsr.s	home
+	movem	d0/d2/d3,-(a7)
+	move	#28,d3
+ffy:	move	#40,d2
+	clr	d0
+ffx:	bsr.s	write
+	subq	#1,d2
+	bne.s	ffx
+	moveq	#10,d0
+	bsr.s	write
+	subq	#1,d3
+	bne.s	ffy
+	movem	(a7)+,d0/d2/d3
+	bsr.s	home
+	rts
+lf:	andi	#$ff80,pos(a5)
+	addi	#$80+xoff*2,pos(a5)
+	rts
+mmsg:	dc.b	12,10,10,10,10,10,10,10,10
+	dc.b	'MISSION:',10
+	dc.b	'PASSWORD:',10
+	dc.b	0
+	cnop	0,2
+line0:	equ	18*128
+line1:	equ	line0+2*128
+
+lines:	move	#$6008+line0,d0
+	lea	alltext(a5),a0
+	bsr.s	anyline
+	move	#$6008+line1,d0
+	lea	alltext+64(a5),a0
+anyline:	move	d0,4(a6)
+	move	#3,4(a6)
+	lea	alphas(a5),a1
+	moveq	#40,d1
+anylinelp:	clr	d0
+	move.b	(a0)+,d0
+	add	d0,d0
+	move	0(a1,d0),(a6)
+	subq	#1,d1
+	bne.s	anylinelp
+	rts
+
+;d0=0 or 1
+bar:	tst.b	d0
+	beq.s	bar0
+	move	#$4000+line0,d0
+	bsr.s	bbar
+	move	#$4000+line1,d0
+	bra.s	pbar
+bar0:	move	#$4000+line1,d0
+	bsr.s	bbar
+	move	#$4000+line0,d0
+pbar:	move	alphas+'@'*2(a5),d1
+	bra.s	anybar
+bbar:	clr	d1
+anybar:	move	d0,4(a6)
+	move	#3,4(a6)
+	moveq	#64,d0
+anybarlp:	move	d1,(a6)
+	subq	#1,d0
+	bne.s	anybarlp
+	rts
+mmsg1:	dc.b	'миссион╨   ',0
+mmsg2:	dc.b	'пассворд╨  ',0
+mmsg2len:	equ	*-mmsg2
+
+;************************************************************************
+
+;mission selection screen
+mission:	bsr	blacken
+	lea	stack+stacksize(a5),a7
+;	bsr	i2a
+	bsr	setup
+	moveq	#8,d0
+	bsr	showpic
+	bsr	fadein
+	bsr	inittext
+;	lea	mmsg(pc),a0
+;	bsr	message
+	clr	d7
+	move	d7,d0
+	bsr	bar
+	lea	alltext(a5),a0
+	moveq	#64,d0
+clat:	clr	(a0)+
+	subq	#1,d0
+	bne.s	clat
+	clr	d5
+	bsr	setline0
+	lea	mmsg2(pc),a0
+	lea	alltext+64(a5),a1
+	bsr	zcopy
+	bsr	lines
+	move	#$8174,4(a6)
+	moveq	#1,d6
+	bsr	ata0
+	lea	password(a5),a1
+	move.b	(a1)+,(a0)+
+	move.b	(a1)+,(a0)+
+	move.b	(a1)+,(a0)+
+	move.b	(a1)+,(a0)+
+mloop0:	clr	d6
+mloopl:	bsr	lines
+mloop:	bsr	vb
+	bsr	vb
+	moveq	#1<<bup+1<<bdown+1<<bleft+1<<bright,d2
+	bsr	cporta
+	btst	#buttons,d0
+	bne	startgame
+	btst	#bup,d0
+	bne	mup
+	btst	#bdown,d0
+	bne.s	mdown
+	btst	#bright,d0
+	bne.s	mright
+	btst	#bleft,d0
+	bne.s	mleft
+	bra.s	mloop
+mright:	tst	d7
+	beq.s	mright0
+	bsr	ata0
+	bchg	#7,(a0)
+	addq	#1,d6
+	cmpi	#5,d6
+	beq.s	mloop0
+	bsr	ata0
+	bchg	#7,(a0)
+	bra.s	mloopl
+mright0:	bsr	maxallow
+	cmp	d5,d0
+	beq.s	mloop
+	addq	#1,d5
+	bsr	setline0
+	bra.s	mloopl
+mleft:	tst	d7
+	beq.s	mleft0
+	tst	d6
+	bne.s	d6fine
+	moveq	#4,d6
+	bra.s	d6wrong
+d6fine:	bsr	ata0
+	bchg	#7,(a0)
+	subq	#1,d6
+	beq.s	mloop0
+d6wrong:	bsr	ata0
+	bchg	#7,(a0)
+	bra	mloopl
+mleft0:	tst	d5
+	beq	mloop
+	subq	#1,d5
+	bsr	setline0
+	bra	mloopl
+mdown:	tst	d7
+	beq.s	zswitch
+	tst	d6
+	beq.s	switchbar
+	bsr	ata0
+	cmpi.b	#'A'+$80,(a0)
+	beq	mloop
+	subq.b	#1,(a0)
+	bsr	lines
+	bra	mloop
+mup:	tst	d7
+	beq.s	zswitch
+	tst	d6
+	beq.s	switchbar
+	bsr	ata0
+	cmpi.b	#'Z'+$80,(a0)
+	beq	mloop
+	addq.b	#1,(a0)
+	bsr	lines
+	bra	mloop
+zswitch:	clr	d6
+switchbar:	bsr	beep
+	not	d7
+	move	d7,d0
+	bsr	bar
+	bra	mloop
+ata0:	lea	alltext+64+mmsg2len-2(a5),a0
+	adda	d6,a0
+	rts
+setline0:	lea	alltext(a5),a0
+	move.l	a0,a1
+	moveq	#64,d0
+clat0:	clr.b	(a0)+
+	subq	#1,d0
+	bne.s	clat0
+	lea	mmsg1(pc),a0
+	bsr	zcopy
+	move	d5,d0
+	lea	missions(pc),a0
+mn:	subq	#1,d0
+	bcs.s	mndone
+mn2:	cmpi.b	#13,(a0)+
+	bne.s	mn2
+	tst.b	(a0)
+	bne.s	mn
+mndone:	bsr	ccopy
+maxallow:	swap	d6
+	clr	d6
+	bsr	ata0
+	swap	d6
+	move.b	1(a0),d0
+	andi	#$7f,d0
+	subi.b	#'A',d0
+	cmpi	#numlevels,d0
+	bcs.s	maxallowok
+	moveq	#numlevels-1,d0
+maxallowok:	rts
+startgame:	tst	d7
+	beq.s	sgok
+	tst	d6
+	beq.s	sgok
+	bsr	ata0
+	bchg	#7,(a0)
+sgok:	moveq	#1,d6
+	bsr	ata0
+	lea	password(a5),a1
+	move.b	(a0)+,(a1)+
+	move.b	(a0)+,(a1)+
+	move.b	(a0)+,(a1)+
+	move.b	(a0)+,(a1)+
+	move.b	d5,whichmission(a5)
+	clr.b	whichsquadleader(a5)
+	bsr	realarray
+	bsr	initgoods
+	bra	gogame
+
+
+
+
+	move	#$8174,4(a6)
+	st	ney(a5)
+	st	blackout(a5)
+missionback:	bsr	showmission
+missionlp:	bsr	mpick
+	tst	d0
+	beq	mission1
+	cmpi	#1,d0
+	beq	mission2
+	cmpi	#2,d0
+	beq	mission3
+	cmpi	#3,d0
+	beq	mission4
+	bra.s	missionlp
+mission1:	lea	m1text(pc),a1
+	bsr	mtext
+	bsr	activeselect
+	subq	#1,d0
+	bcs	missionback
+	move	d0,currentgame(a5)
+	bsr	findsg
+	btst	#sg_used,sg_flags(a0)
+	beq	missionback
+	bsr	restore
+
+gogame:	bsr	i2a
+	clr.b	blackout(a5)
+	bsr	zerotext
+	bsr	z80dl
+	bsr	putsprites2
+	bsr	vb
+	bsr	thisman
+;	bsr	initgoods
+	bsr	vb
+	move	#$8174,4(a6)
+	bra	movelp
+
+mission3:	lea	m3text(pc),a1
+	bsr	mtext
+	bsr	activeselect
+	subq	#1,d0
+	bcs	missionback
+	bsr	killmission
+	bsr	fixbb
+	bra	missionback
+
+mission2:	lea	m2texta(pc),a1
+	bsr	mtext
+
+	moveq	#20,d4
+	moveq	#5,d5	;10
+	moveq	#1,d6
+	moveq	#6,d7
+	lea	missions(pc),a2
+	bsr	mpick2
+	move.b	d0,whichmission(a5)
+
+	lea	m2textb(pc),a1
+	bsr	mtext
+	bsr	sllist
+	moveq	#20,d4
+	moveq	#10,d5
+	moveq	#1,d6
+	moveq	#6,d7
+	bsr	mpick2
+	move.b	d0,whichsquadleader(a5)
+
+	lea	m2textc(pc),a1
+	bsr	mtext
+	bsr	activeselect
+	subq	#1,d0
+	bcs	missionback
+	move	d0,-(a7)
+
+	bsr	realarray
+	bsr	initgoods
+	move	(a7)+,d0
+	bsr	savegame
+	bra	missionback
+
+mission4done:	st	ney(a5)
+	bsr	showmission
+	bra	missionlp
+mission4:	clr.b	nex(a5)
+	clr.b	ney(a5)
+	lea	m4help(pc),a1
+	moveq	#3,d6
+	moveq	#6,d7
+	bsr	text2
+m4outer:	bsr	showmission2
+m4lp:	bsr	vb
+	moveq	#-1,d2
+	bsr	cporta
+	beq.s	m4lp
+	btst	#bdown,d0
+	bne.s	m4down
+	btst	#bleft,d0
+	bne.s	m4left
+	btst	#bright,d0
+	bne.s	m4right
+	btst	#bup,d0
+	bne.s	m4up
+	btst	#buttonb,d0
+	bne.s	mission4done
+	btst	#buttona,d0
+	bne.s	m4prev
+	btst	#buttonc,d0
+	bne.s	m4next
+	bra.s	m4lp
+
+m4down:	addq.b	#1,ney(a5)
+	cmpi.b	#maxsl,ney(a5)
+	bne.s	m4outer
+	clr.b	ney(a5)
+	bra.s	m4outer
+m4up:	subq.b	#1,ney(a5)
+	bcc.s	m4outer
+	move.b	#maxsl-1,ney(a5)
+	bra.s	m4outer
+m4left:	subq.b	#1,nex(a5)
+	bcc.s	m4outer
+	move.b	#slnamelen-1,nex(a5)
+	bra.s	m4outer
+m4right:	addq.b	#1,nex(a5)
+	cmpi.b	#slnamelen,nex(a5)
+	bne.s	m4outer
+	clr.b	nex(a5)
+	bra.s	m4outer
+m4prev:	bsr.s	m4a0
+	move.b	-1(a1),(a0)
+	bsr	fixbb
+	bra	m4outer
+m4next:	bsr.s	m4a0
+	move.b	1(a1),(a0)
+	bsr	fixbb
+	bra	m4outer
+m4a0:	move	#sl_size,d0
+	clr	d1
+	move.b	ney(a5),d1
+	mulu	d1,d0
+	lea	bbram+sl_name,a0
+	adda	d0,a0
+	move.b	nex(a5),d1
+	add	d1,d1
+	adda	d1,a0
+	lea	m4list+1(pc),a1
+	move.b	(a0),d0
+m4find:	cmp.b	(a1)+,d0
+	bne.s	m4find
+	subq	#1,a1
+	rts
+
+
+
+
+;d0=mission #
+restore:	rts
+	bsr	findsg
+	lea	savestart(a5),a1
+	btst	#sg_used,2(a0)
+	beq.s	clearsg
+	move.b	4(a0),whichmission(a5)
+	move.b	6(a0),whichsquadleader(a5)
+	addq	#8,a0
+	bsr	unpack
+	lea	things+2*th_size(a5),a0
+	move	#numthings-2,d0
+rfix1:	move	#-1,th_fig(a0)
+	lea	th_size(a0),a0
+	subq	#1,d0
+	bne.s	rfix1
+	lea	figused(a5),a0
+	moveq	#figusedlen,d0
+figusedlp:	clr.l	(a0)+
+	subq	#4,d0
+	bne.s	figusedlp
+	rts
+
+clearsg:	move	#saveend-savestart,d0
+clearsglp:	clr.b	(a1)+
+	subq	#1,d0
+	bne.s	clearsglp
+	rts
+;d0=saved game to find
+;return a0=pointer to that sg
+findsg:	lea	sgstart,a0
+sgfind:	cmp.b	(a0),d0
+	beq.s	sgfound
+	addq	#8,a0
+	moveq	#0,d1
+	move.b	(a0),d1
+	rol	#8,d1
+	move.b	2(a0),d1
+	add	d1,d1
+	adda.l	d1,a0
+	bra.s	sgfind
+sgfound:	rts
+
+;d0=mission
+killmission:	bsr	findsg
+	move.l	a0,a1
+	addq	#8,a1
+	moveq	#0,d1
+	move.b	(a1),d1
+	rol	#8,d1
+	move.b	2(a1),d1
+	add	d1,d1
+	adda.l	d1,a1
+compactlp:	tst.b	(a1)
+	bmi.s	compacted
+	move.b	8(a1),d1
+	rol	#8,d1
+	move.b	10(a1),d1
+	addq	#4,d1
+compact1:	move.b	(a1),(a0)
+	addq	#2,a0
+	addq	#2,a1
+	subq	#1,d1
+	bne.s	compact1
+	bra.s	compactlp
+compacted:	move.b	d0,(a0)
+	clr.b	2(a0)
+	clr.b	4(a0)
+	clr.b	6(a0)
+	clr.b	8(a0)
+	move.b	#2,10(a0)
+	st	12(a0)
+	rts
+;d0=saved game
+savegame:	rts
+	bsr	killmission
+	move.b	d0,(a0)
+	move.b	#1<<sg_used,2(a0)
+	move.b	whichmission(a5),4(a0)
+	move.b	whichsquadleader(a5),6(a0)
+	move.l	a0,-(a7)
+	lea	savestart(a5),a1
+	bsr	pack
+	st	(a0)
+	move.l	(a7)+,a0
+	addq	#2,d0
+	addq	#8,a0
+	move.b	d0,2(a0)
+	rol	#8,d0
+	move.b	d0,(a0)
+	bra	fixbb
+
+
+;a0 points to 2 byte count
+unpack:	move	#saveend-savestart,d0
+	addq	#4,a0
+unpacklp:	move.b	(a0),(a1)+
+	addq	#2,a0
+	subq	#1,d0
+	bne.s	unpacklp
+	rts
+;a0=bb location
+;a1=saved game to save
+;return a0=byte after sg
+;d0=# of bytes in record
+pack:	move	#saveend-savestart,d0
+	move	d0,d1
+	adda	#12,a0
+packlp:	move.b	(a1)+,(a0)
+	addq	#2,a0
+	subq	#1,d1
+	bne.s	packlp
+	rts
+
+
+sglist:	moveq	#0,d6
+	lea	scratch2(pc),a4
+sglistlp:	moveq	#'1',d0
+	add	d6,d0
+	move.b	d0,(a4)+
+	moveq	#35,d0
+	move.l	a4,a3
+sgl1:	move.b	#' ',(a4)+
+	subq	#1,d0
+	bne.s	sgl1
+	move.b	#13,(a4)+
+	addq	#1,a3
+	move	d6,d0
+	bsr	findsg
+	btst	#sg_used,sg_flags(a0)
+	beq.s	sglblank
+	move.l	a0,a2
+	move.b	sg_mission(a2),d0
+	bsr	getmname
+	move.l	a3,a1
+copymname:	move.b	(a0)+,(a1)+
+	cmpi.b	#13,(a0)
+	bne.s	copymname
+	clr	d0
+	move.b	sg_sl(a2),d0
+	mulu	#sl_size,d0
+	lea	bbram+sl_name,a0
+	adda	d0,a0
+	moveq	#slnamelen,d0
+	lea	26(a3),a1
+copyslname:	move.b	(a0),(a1)+
+	addq	#2,a0
+	subq	#1,d0
+	bne.s	copyslname
+sglblank:	addq	#1,d6
+	cmpi	#maxsg,d6
+	bne.s	sglistlp
+	clr.b	(a4)
+	lea	scratch2(pc),a2
+	rts
+getmname:	lea	missions(pc),a0
+gmnlp:	subq.b	#1,d0
+	bcs.s	gotmname
+gmnskip:	cmpi.b	#13,(a0)+
+	bne.s	gmnskip
+	bra.s	gmnlp
+gotmname:	rts
+
+picksl:	bsr	sllist
+	moveq	#16,d4
+	moveq	#maxsl,d5
+	moveq	#4,d6
+	moveq	#6,d7
+	bra	mpick2
+
+;d7 bits 0 to 9, true if sl is used in mission
+getslbits:	moveq	#0,d7
+	moveq	#0,d6
+slmark:	move	d6,d0
+	bsr	findsg
+	btst	#sg_used,sg_flags(a0)
+	beq.s	slmarknext
+	move.b	sg_sl(a0),d0
+	bset	d0,d7
+slmarknext:	addq	#1,d6
+	cmpi	#maxsg,d6
+	bne.s	slmark
+	rts
+
+sllist:	bsr	getslbits
+	lea	scratch2(a5),a2
+	lea	bbram,a0
+	moveq	#0,d4
+makesllist:
+;	btst	#sl_used,(a0)
+;	beq.s	slblank
+	move.b	sl_rank(a0),d0
+	add	d0,d0
+	lea	ranks(pc),a1
+	move.b	(a1)+,(a2)+
+	move.b	(a1)+,(a2)+
+	move.b	#' ',(a2)+
+	moveq	#0,d0
+	lea	sl_name(a0),a1
+slnlp:	move.b	(a1),(a2)+
+	cmp.b	ney(a5),d4
+	bne.s	noinverse
+	cmp.b	nex(a5),d0
+	bne.s	noinverse
+	ori.b	#$80,-1(a2)
+	cmpi.b	#$80+' ',-1(a2)
+	bne.s	noinverse
+	move.b	#'Z'+1,-1(a2)
+noinverse:	addq	#2,a1
+	addq	#1,d0
+	cmpi	#slnamelen,d0
+	bne.s	slnlp
+	move.b	#' ',(a2)+
+	btst	d4,d7
+	beq.s	afree
+	move.b	#'B',(a2)+
+	move.b	#'U',(a2)+
+	move.b	#'S',(a2)+
+	move.b	#'Y',(a2)+
+	bra.s	contsl
+slblank:	moveq	#10,d0
+slblp:	move.b	#' ',(a2)+
+	subq	#1,d0
+	bne.s	slblp
+afree:	move.b	#' ',(a2)
+	move.b	(a2)+,(a2)
+	move.b	(a2)+,(a2)
+	move.b	(a2)+,(a2)+
+contsl:	move.b	#13,(a2)+
+	lea	sl_size(a0),a0
+	addq	#1,d4
+	cmpi	#maxsl,d4
+	bne	makesllist
+	clr.b	(a2)
+	lea	scratch2(a5),a2
+	rts
+
+
+activeselect:	moveq	#6,d4
+	moveq	#maxsg+1,d5
+	moveq	#8,d6
+	moveq	#6,d7
+	lea	activelist(pc),a2
+	bsr	pick
+	bra	showmission
+
+mtext:	moveq	#3,d6
+	moveq	#4,d7
+	bra	text2
+
+showmission2:	move	d0,-(a7)
+	bra.s	showmission3
+mpick:	moveq	#18,d4
+	moveq	#4,d5
+	moveq	#1,d6
+	moveq	#6,d7
+	lea	missionmenu(pc),a2
+mpick2:	bsr	pick
+showmission:	move	d0,-(a7)
+	bsr	cleartext
+showmission3:
+;	moveq	#18,d4
+;	moveq	#14,d5
+;	moveq	#1,d6
+;	moveq	#4,d7
+;	lea	missions(pc),a2
+;	bsr	makebox
+;	lea	textbox(a5),a1
+;	bsr	text
+
+	bsr	sllist
+	move.l	a2,a1
+	moveq	#14,d4
+	moveq	#10,d5
+	moveq	#22,d6
+	moveq	#5,d7
+;	bsr	makebox
+;	lea	textbox(a5),a1
+	bsr	text2
+
+	bsr	sglist
+	moveq	#36,d4
+	moveq	#3,d5
+	moveq	#2,d6
+	moveq	#23,d7
+	move.l	a2,a1
+;	bsr	makebox
+;	lea	textbox(a5),a1
+	bsr	text2
+
+	lea	missiontext(pc),a4
+	bsr	manytext
+
+	bsr	pshow
+	move	(a7)+,d0
+	rts
+
+initbb:	bsr.s	verifybb
+	beq.s	bbok
+	lea	bbram,a0
+	move	#bbsize,d0
+bbinitlp:	clr.b	(a0)
+	addq	#2,a0
+	subq	#1,d0
+	bne.s	bbinitlp
+	lea	bbram,a0
+	lea	inames(pc),a2
+	moveq	#maxsl,d0
+initsl:	lea	sl_name(a0),a1
+	moveq	#slnamelen,d1
+initsln:	move.b	(a2)+,(a1)
+	addq	#2,a1
+	subq	#1,d1
+	bne.s	initsln
+	lea	sl_size(a0),a0
+	subq	#1,d0
+	bne.s	initsl
+
+	lea	sgstart,a0
+	moveq	#maxsg,d0
+	moveq	#0,d1
+initsg:	move.b	d1,(a0)
+	addq	#8,a0
+	addq	#2,a0
+	move.b	#2,(a0)
+	addq	#2,a0
+	addq	#1,d1
+	subq	#1,d0
+	bne.s	initsg
+	move.b	#-1,(a0)
+
+	bsr	fixbb
+bbok:	rts
+verifybb:	bsr.s	sumbb
+	cmp.b	(a0),d0
+	bne.s	verifyfail
+	addq	#2,a0
+	ror	#8,d0
+	cmp.b	(a0),d0
+verifyfail:	rts
+fixbb:	bsr.s	sumbb
+	move.b	d0,(a0)
+	addq	#2,a0
+	ror	#8,d0
+	move.b	d0,(a0)
+	rts
+sumbb:	lea	bbram,a0
+	moveq	#0,d0
+	move	#bbsize-2,d1
+sumbblp:	move.b	(a0),d2
+	eor.b	d2,d0
+	rol	#1,d0
+	addq	#2,a0
+	subq	#1,d1
+	bne.s	sumbblp
+	not	d0
+	rts
+
+
+tryexit:	move	currentman(a5),d0
+	bsr	anymantoa2
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	bsr	locate
+	cmpi.b	#30,(a0)
+	bne.s	noexit
+	move	currentman(a5),-(a7)
+	bsr	nextman
+	move	(a7),d0
+	bsr	anymantoa2
+	bset	#th_exited,th_flags(a2)
+	move	#-1,th_floor(a2)
+	move.l	a2,a0
+	bsr	freesprite
+	move	(a7)+,d0
+	cmp	currentman(a5),d0
+	beq	docontinue
+	bsr	thisman
+noexit:	rts
+
+checkvictory:	bsr.s	cv2
+	beq	victory
+	bmi	fail
+	bsr	countactive
+	beq	fail
+	moveq	#0,d0
+	bsr	anymantoa2
+	tst	th_health(a2)
+	beq	sldead
+	rts
+fail:	st	infoshow(a5)
+	bsr	song1
+	bsr	error22
+	bra.s	dokm
+sldead:	move	th_floor(a2),floor(a5)
+	st	infoshow(a5)
+	bsr	song1
+	bsr	error23
+	bra.s	dokm
+victory:	st	infoshow(a5)
+	bsr	song2
+	bsr	error24
+dokm:	move	currentgame(a5),d0
+	bsr	killmission
+	bsr	fixbb
+	bsr	z80dl
+	bra	mission
+
+
+;returns d0=0 if victorious
+;1 if not
+;-1 if cannot possibly win
+cv2:	lea	objects(a5),a0
+	move	#maxobjects,d0
+	moveq	#0,d1	;number of held hostages
+	moveq	#0,d2	;number of hostages total
+	moveq	#0,d3	;number of held datapacks
+	moveq	#0,d4	;number of datapacks total
+countpris:	tst	obj_floor(a0)
+	bpl.s	maybeused
+	tst	obj_owner(a0)
+	bmi.s	cdpnext
+maybeused:	cmpi	#c_hostage,obj_what(a0)
+	bne.s	cpnext
+	addq	#1,d2
+	tst	obj_floor(a0)
+	bpl.s	cpnext
+	tst	obj_owner(a0)
+	ble.s	cpnext
+	addq	#1,d1
+cpnext:	cmpi	#c_datapack,obj_what(a0)
+	bne.s	cdpnext
+	addq	#1,d4
+	tst	obj_floor(a0)
+	bpl.s	cdpnext
+;	tst	obj_owner(a0)
+;	ble.s	cdpnext
+	addq	#1,d3
+cdpnext:	lea	obj_size(a0),a0
+	subq	#1,d0
+	bne.s	countpris
+	move.b	d1,hostages1(a5)
+	move.b	d2,hostages2(a5)
+	move.b	d3,datapacks1(a5)
+	move.b	d4,datapacks2(a5)
+
+	moveq	#0,d6
+	move.b	vcond(a5),d7
+	btst	#0,d7
+	beq.s	nov0
+	cmp.b	numhostages(a5),d2
+	bne	cantwin
+	cmp.b	numhostages(a5),d1
+	beq.s	nov0
+	moveq	#1,d6
+nov0:	btst	#1,d7
+	beq.s	nov1
+	cmp.b	numdatapacks(a5),d4
+	bne	cantwin
+	cmp.b	numdatapacks(a5),d3
+	beq.s	nov1
+	moveq	#1,d6
+nov1:	btst	#3,d7
+	beq.s	nov3
+	moveq	#0,d1	;number of dead enemies
+	move	#numthings,d0
+	lea	things(a5),a0
+countenemies:	btst	#th_used,th_flags(a0)
+	beq.s	cenext
+	btst	#th_entity,th_flags(a0)
+	beq.s	cenext
+	btst	#th_man,th_flags(a0)
+	bne.s	cenext
+	tst	th_health(a0)
+	bne.s	cenext
+	addq	#1,d1
+cenext:	lea	th_size(a0),a0
+	subq	#1,d0
+	bne.s	countenemies
+	move.b	d1,enemies1(a5)
+	mulu	#100,d1
+	move.b	numenemies(a5),d0
+	moveq	#0,d2
+	move.b	killpercent(a5),d2
+	mulu	d2,d0
+	cmp	d0,d1
+	bcc.s	nov3
+	moveq	#1,d6
+nov3:	btst	#4,d7
+	beq.s	nov4
+	tst	d4
+	beq.s	nov4
+	moveq	#1,d6
+nov4:	btst	#2,d7
+	beq.s	nov2
+	moveq	#0,d4
+checkmenexit:	move	d4,d0
+	bsr	anymantoa2
+	tst	th_health(a2)
+	beq.s	manpassed
+	btst	#th_exited,th_flags(a2)
+	beq.s	badv2
+manpassed:	addq	#1,d4
+	cmpi	#maxmen,d4
+	bne.s	checkmenexit
+	bra.s	nov2
+badv2:	moveq	#1,d6
+nov2:	bsr	countactive
+	move.b	d0,active1(a5)
+	btst	#5,d7
+	beq.s	nov5
+	cmp.b	occupynumber(a5),d0
+	bcs	cantwin
+	moveq	#0,d4
+	moveq	#0,d5
+occnum:	move	d4,d0
+	bsr	anymantoa2
+	bsr	locate2
+	cmpi.b	#31,(a0)
+	bne.s	noincd5
+	addq	#1,d5
+noincd5:	addq	#1,d4
+	cmpi	#maxmen,d4
+	bne.s	occnum
+	move.b	d5,occupy1(a5)
+	cmp.b	occupynumber(a5),d5
+	bcc.s	nov5
+	moveq	#1,d6
+nov5:	move	d6,d0
+	rts
+
+cantwin:	moveq	#-1,d0
+	rts
+
+countactive:	moveq	#0,d4
+	moveq	#0,d5
+countactivelp:	move	d4,d0
+	bsr	anymantoa2
+	tst	th_health(a2)
+	beq.s	noincmen
+	btst	#th_exited,th_flags(a2)
+	bne.s	noincmen
+	addq	#1,d5
+noincmen:	addq	#1,d4
+	cmpi	#maxmen,d4
+	bne.s	countactivelp
+	move	d5,d0
+	rts
+
+drown:	moveq	#0,d7
+drownlp:	move	d7,d0
+	bsr	anymantoa2
+	btst	#th_float,th_flags(a2)
+	beq.s	drownnext
+	bclr	#th_float,th_flags(a2)
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	bsr	locate
+	move.b	(a0),d0
+	cmpi.b	#waterlow,d0
+	bcs.s	drownnext
+	cmpi.b	#waterlow+2,d0
+	bcc.s	drownnext
+	move	d7,currentman(a5)
+	bsr	thisman
+	bsr	sound14
+	bsr	soundwait
+	bsr	mantoa2
+	clr	th_health(a2)
+	bsr	scroll
+	move	currentman(a5),d7
+drownnext:	addq	#1,d7
+	cmpi	#10,d7
+	bne.s	drownlp
+	rts
+
+doenemies:	move.b	infoshow(a5),-(a7)
+	st	infoshow(a5)
+	bsr	clearinfo
+	lea	things(a5),a4
+	move	#numthings,tempc(a5)
+doenemieslp:	btst	#th_entity,th_flags(a4)
+	beq.s	doenemynext
+	btst	#th_man,th_flags(a4)
+	bne.s	doenemynext
+	tst	th_health(a4)
+	beq.s	doenemynext
+	move	th_what(a4),d0
+	subi	#characters,d0
+	pea	doenemynext(pc)
+	cmpi	#6,d0
+	beq	dowedgel
+	cmpi	#1,d0
+	beq	domarauder
+	cmpi	#2,d0
+	beq	dorex
+	cmpi	#3,d0
+	beq	doalien
+	cmpi	#4,d0
+	beq	doteradon
+	cmpi	#5,d0
+	beq	dogun
+	cmpi	#7,d0
+	beq	dotank
+	cmpi	#8,d0
+	beq	dorobot
+	cmpi	#9,d0
+	beq	dobiped
+	addq	#4,a7
+doenemynext:	lea	th_size(a4),a4
+	subq	#1,tempc(a5)
+	bne.s	doenemieslp
+	move.b	(a7)+,infoshow(a5)
+	rts
+
+dogun:	move.l	a4,ent2(a5)
+	move	th_floor(a4),floor(a5)
+	move	#gunmp,mptemp(a5)
+dogunlp:	bsr	findtarget3
+	bmi	ignore
+	move	d0,th_direction(a4)
+	move.l	a2,ent(a5)
+	move.l	a4,a2
+	bsr	fixthing
+	move.l	ent(a5),a2
+	move	th_x(a2),xpos(a5)
+	move	th_y(a2),ypos(a5)
+	bsr	pscroll
+	move	xpos(a5),d0
+	move	ypos(a5),d1
+	move.l	ent2(a5),a2
+	bsr	dorifle
+	move.l	ent2(a5),a4
+	subi	#cost_rifle,mptemp(a5)
+	bpl	dogunlp
+	rts
+
+boxent:	move.l	ent2(a5),a0
+	move	th_x(a0),d2
+	move	th_y(a0),d3
+	bra	crosshair
+mgren:	equ	0
+msmoke:	equ	1
+domarauder:	move.l	a4,ent2(a5)
+	move	th_floor(a4),floor(a5)
+	move	#maraudermp,mptemp(a5)
+domarauderlp:	bsr	findtarget10
+	bmi	ignore
+	move	d0,th_direction(a4)
+	cmpi	#5,d1
+	bcs.s	maraudattack
+	bsr	moveent
+	beq	ignore
+	tst	mptemp(a5)
+	bpl.s	domarauderlp
+	move.l	a4,a2
+	bra	fixthing
+maraudattack:	bsr	boxent
+	move.l	a2,ent(a5)
+	move.l	a4,a2
+	bsr	fixthing
+	move.l	ent(a5),a2
+	move	th_x(a2),xpos(a5)
+	move	th_y(a2),ypos(a5)
+	bsr	pscroll
+	btst	#mgren,th_flags+1(a4)
+	bne.s	usedgren
+	bset	#mgren,th_flags+1(a4)
+	move	xpos(a5),d0
+	move	ypos(a5),d1
+	bsr	dogrenade
+	bsr	soundwait
+	move.l	ent2(a5),a4
+	tst	th_health(a4)
+	beq	marauderdone
+	subi	#cost_grenade,mptemp(a5)
+	bpl	domarauderlp
+	bra	marauderdone
+usedgren:	btst	#msmoke,th_flags+1(a4)
+	bne.s	usedsmoke
+	bset	#msmoke,th_flags+1(a4)
+	move	xpos(a5),d0
+	move	ypos(a5),d1
+	bsr	dosmoke
+	bsr	soundwait
+	move.l	ent2(a5),a4
+	subi	#cost_smoke,mptemp(a5)
+	bpl	domarauderlp
+	bra	marauderdone
+usedsmoke:	move	xpos(a5),d0
+	move	ypos(a5),d1
+	move.l	ent2(a5),a2
+	bsr	dorifle
+	bsr	soundwait
+	move.l	ent2(a5),a4
+	subi	#cost_rifle,mptemp(a5)
+	bpl	domarauderlp
+marauderdone:	rts
+
+doteradon:	move	th_floor(a4),floor(a5)
+	move	#termp,mptemp(a5)
+doterlp:	bsr	findtarget6
+	bmi	ignore
+	move	d0,th_direction(a4)
+	cmpi	#1,d1
+	beq.s	terattack
+	bsr	moveent
+	beq	ignore
+	tst	mptemp(a5)
+	bpl.s	doterlp
+	move.l	a4,a2
+	bra	fixthing
+terattack:	move.l	a2,ent(a5)
+	move.l	a4,a2
+	bsr	fixthing
+	move.l	ent(a5),a2
+	move	th_x(a2),xpos(a5)
+	move	th_y(a2),ypos(a5)
+	bsr	pscroll
+	bsr	sound8
+;	move	#128*3+48,d0
+	moveq	#12,d2
+	moveq	#12,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	lea	animlist(a5),a1
+	move	#xadj*24,an_x(a1)
+	move	#yadj*24,an_y(a1)
+	move	#$23f7,an_fig(a1)
+	move	#1,animnum(a5)
+	bsr	sprites
+	bsr	putsprites
+	bsr	w8
+;	move	#128*3+54,d0
+	moveq	#15,d2
+	moveq	#12,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	bsr	w8
+;	move	#128*3+60,d0
+	moveq	#18,d2
+	moveq	#12,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	bsr	w8
+;	move	#128*3+66,d0
+	moveq	#21,d2
+	moveq	#12,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	bsr	w8
+	clr	animnum(a5)
+	bsr	sprites
+	bsr	putsprites
+	bsr	soundwait
+	moveq	#terhurt,d0
+	move.l	ent(a5),a0
+	bsr	hurtent
+	subi	#tertime1,mptemp(a5)
+	bpl	doterlp
+	rts
+
+
+dobiped:
+dotank:
+dowedgel:	move	th_floor(a4),floor(a5)
+	move	#wedgelmp,mptemp(a5)
+dowedgellp:	bsr	findtarget6
+	bmi	ignore
+	move	d0,th_direction(a4)
+	cmpi	#1,d1
+	beq.s	wedgelattack
+	bsr	moveent
+	beq	ignore
+	tst	mptemp(a5)
+	bpl.s	dowedgellp
+	move.l	a4,a2
+	bra	fixthing
+wedgelattack:	move.l	a2,ent(a5)
+	move.l	a4,a2
+	bsr	fixthing
+	move.l	ent(a5),a2
+	move	th_x(a2),xpos(a5)
+	move	th_y(a2),ypos(a5)
+	bsr	pscroll
+	bsr	sound7
+	move	th_direction(a4),d2
+	andi	#3,d2
+	mulu	#3,d2
+	moveq	#12,d3
+;	mulu	#6,d0
+;	addi	#48,d0
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	lea	animlist(a5),a1
+	move	th_x(a4),d2
+	move	th_y(a4),d3
+	move	xpos(a5),d0
+	move	ypos(a5),d1
+	sub	d0,d2
+	sub	d1,d3
+	muls	#24,d2
+	muls	#24,d3
+	addi	#xadj*24,d2
+	addi	#yadj*24,d3
+	move	d2,an_x(a1)
+	move	d3,an_y(a1)
+	move	#$23f7,an_fig(a1)
+	move	#1,animnum(a5)
+	move	#24,temp(a5)
+wblast:	move.l	a4,-(a7)
+	bsr	sprites
+	bsr	vb
+	bsr	putsprites
+	move.l	(a7)+,a4
+	lea	animlist(a5),a0
+	lea	dx(pc),a1
+	move	th_direction(a4),d0
+	add	d0,d0
+	move	dy-dx(a1,d0),d1
+	move	0(a1,d0),d0
+;	add	d0,d0
+	add	d0,an_x(a0)
+;	add	d1,d1
+	add	d1,an_y(a0)
+	subq	#1,temp(a5)
+	bne.s	wblast
+	clr	animnum(a5)
+	bsr	sprites
+	bsr	putsprites
+	bsr	soundwait
+	moveq	#wedgelhurt,d0
+	move.l	ent(a5),a0
+	bsr	hurtent
+	subi	#wedgeltime1,mptemp(a5)
+	bpl	dowedgellp
+	rts
+
+doalien:
+dorobot:
+dorex:	move	th_floor(a4),floor(a5)
+	move	#rexmp,mptemp(a5)
+dorexlp:	bsr	findtarget6
+	bmi	ignore
+	move	d0,th_direction(a4)
+	cmpi	#1,d1
+	beq.s	rexattack
+	bsr	moveent
+	beq	ignore
+	tst	mptemp(a5)
+	bpl.s	dorexlp
+	move.l	a4,a2
+	bra	fixthing
+rexattack:	move.l	a2,ent(a5)
+	move.l	a4,a2
+	bsr	fixthing
+	move.l	ent(a5),a2
+	move	th_x(a2),xpos(a5)
+	move	th_y(a2),ypos(a5)
+	bsr	pscroll
+	bsr	sound1
+;	move	#128*3+48,d0
+	moveq	#12,d2
+	moveq	#12,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	lea	animlist(a5),a1
+	move	#xadj*24,an_x(a1)
+	move	#yadj*24,an_y(a1)
+	move	#$23f7,an_fig(a1)
+	move	#1,animnum(a5)
+	bsr	sprites
+	bsr	putsprites
+	bsr	w8
+;	move	#128*3+54,d0
+	moveq	#15,d2
+	moveq	#12,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	bsr	w8
+;	move	#128*3+60,d0
+	moveq	#18,d2
+	moveq	#12,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	bsr	w8
+;	move	#128*3+66,d0
+	moveq	#21,d2
+	moveq	#12,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	bsr	w8
+	clr	animnum(a5)
+	bsr	sprites
+	bsr	putsprites
+	bsr	soundwait
+	moveq	#rexhurt,d0
+	move.l	ent(a5),a0
+	bsr	hurtent
+	subi	#rextime1,mptemp(a5)
+	bpl	dorexlp
+	rts
+
+dy:	dc	-1,-1
+dx:	dc	0,1,1,1,0,-1,-1,-1
+;a4=entity,d0=direction to try to move it
+;return Z if cannot move in that direction
+moveent:	move	th_x(a4),d2
+	move	th_y(a4),d3
+	add	d0,d0
+	add	dx(pc,d0),d2
+	add	dy(pc,d0),d3
+	bsr	locate
+	bsr	enterable2
+	beq.s	moveentdone
+	move	d2,th_x(a4)
+	move	d3,th_y(a4)
+	sub	d4,mptemp(a5)
+
+moveentdone:	rts
+
+;a4=entity, find nearest marine within d5 limit
+;return M if can't find one
+;otherwise d0=DIR,d1=dist,a2=thing
+findtarget3:	move	#3,d5
+	bra.s	anytarget
+findtarget10:	move	#10,d5
+	bra.s	anytarget
+findtarget6:	move	#6,d5
+anytarget:	lea	things(a5),a2
+	moveq	#numthings,d4
+	moveq	#-1,d6
+findtarg:	btst	#th_man,th_flags(a2)
+	beq.s	findtargnext
+;	btst	#th_exited,th_flags(a2)
+;	bne.s	findtargnext
+	tst	th_health(a2)
+	beq.s	findtargnext
+	move	th_floor(a2),d0
+	cmp	th_floor(a4),d0
+	bne.s	findtargnext
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	sub	th_x(a4),d2
+	sub	th_y(a4),d3
+	move	d2,d0
+	bpl.s	d0pos
+	neg	d0
+d0pos:	move	d3,d1
+	bpl.s	d1pos
+	neg	d1
+d1pos:	cmp	d5,d0
+	bcc.s	findtargnext
+	cmp	d5,d1
+	bcc.s	findtargnext
+	cmp	d1,d0
+	bcc.s	d0small
+	move	d1,d0
+d0small:	cmp	d6,d0
+	bcc.s	findtargnext
+	move	d0,d6
+	move.l	a2,a1
+findtargnext:	lea	th_size(a2),a2
+	subq	#1,d4
+	bne.s	findtarg
+	move	d6,d1
+	bmi.s	notarget
+	move.l	a1,a2
+	move	th_x(a4),d2
+	move	th_y(a4),d3
+	sub	th_x(a2),d2
+	sub	th_y(a2),d3
+	bsr	direction
+	move	d6,d1
+notarget:	rts
+
+
+;set all movement points to maximum, point to first guy
+initgoods:	move	#-1,currentman(a5)
+fm:	addq	#1,currentman(a5)
+	bsr	mantoa2
+	tst	th_health(a2)
+	beq.s	fm
+	btst	#th_exited,th_flags(a2)
+	bne.s	fm
+
+	move	#-1,lastobjused(a5)
+	moveq	#0,d4
+initmen:	move	d4,d0
+	bsr	anymantoa2
+	move	#50,th_moves(a2)	;compute actual moves
+	addq	#1,d4
+	cmpi	#maxmen,d4
+	bcs.s	initmen
+	bra	limit4
+
+dospecial:	moveq	#10,d4
+	moveq	#5,d5
+	moveq	#15,d6
+	moveq	#12,d7
+	lea	specials(pc),a2
+	bsr	pick
+	tst	d0
+	beq.s	domenu
+	cmpi	#1,d0
+	beq	showbrief
+	cmpi	#2,d0
+	beq	showorders
+	cmpi	#3,d0
+	beq	showmap	;dolist
+	cmpi	#4,d0
+	beq.s	tomission
+	rts
+tomission:	move	currentgame(a5),d0
+	bsr	savegame
+	bra	mission
+
+domenu:	moveq	#8,d4
+	moveq	#9,d5
+	moveq	#15,d6
+	moveq	#9,d7
+	lea	choices(pc),a2
+	move	lastpick(a5),d3
+	bsr	pick2
+	move	d0,lastpick(a5)
+	cmpi	#1,d0
+	beq	setactuse
+	cmpi	#2,d0
+	beq	docontinue
+	cmpi	#4,d0
+	beq	setacttake
+	cmpi	#5,d0
+	beq	setactdrop
+	cmpi	#6,d0
+	beq	tryexit
+;	beq	showmap
+;	cmpi	#8,d0	;briefing
+;	beq	showorders
+	cmpi	#8,d0
+	beq	uselift
+	cmpi	#7,d0
+	beq	usedoor
+	cmpi	#3,d0
+	beq	dospecial
+	rts
+no5:
+	btst	#buttonc,d0
+	beq.s	nohitc
+	bsr	beep
+	bra	dolist
+;	bra	showmap
+nohitc:
+	clr	d4
+	move	cxpos(a5),d2
+	move	cypos(a5),d3
+
+	btst	#bleft,d0
+	beq.s	no1
+	subq	#1,d2
+	addq	#1,d4
+no1:	btst	#bright,d0
+	beq.s	no2
+	addq	#1,d2
+	addq	#1,d4
+no2:	btst	#bup,d0
+	beq.s	no3
+	subq	#1,d3
+	addq	#1,d4
+no3:	btst	#bdown,d0
+	beq.s	no4
+	addq	#1,d3
+	addq	#1,d4
+no4:	tst	d4
+	beq.s	noscroll
+	bsr	mantoa2
+	cmpi	#bxsize,d2
+	bcc.s	noscroll
+	cmpi	#bysize,d3
+	bcc.s	noscroll
+
+	move	th_x(a2),d0
+	move	th_y(a2),d1
+	sub	d2,d0
+	sub	d3,d1
+
+	move	d0,d4
+	bpl.s	d4posx
+	neg	d4
+d4posx:	cmp	limitx(a5),d4
+	bhi.s	noscroll
+	move	d1,d4
+	bpl.s	d4posy
+	neg	d4
+d4posy:	cmp	limity(a5),d4
+	bhi.s	noscroll
+
+	cmpi	#actmove,action(a5)
+	bne.s	nohm
+	bsr	handlemove
+	bne	noscroll
+nohm:
+	bsr	crosshair
+
+	bsr	nocrosshair2
+	move	d0,d2
+	move	d1,d3
+	or	d1,d0
+	beq.s	nocross2
+	bsr	direction
+	move	d0,th_direction(a2)
+	bsr	fixthing
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	bsr	crosshair2
+nocross2:	bsr	beep
+	bsr	scroll
+
+noscroll:
+;	moveq	#1,d4
+;vvv:	bsr	vb
+;	subq	#1,d4
+;	bne.s	vvv
+	rts
+
+
+;d2=x,d3=y to add
+;a2=current man
+;return Z if ok
+;return NZ if move would require too many movement points
+handlemove:	lea	scratch(a5),a0
+	lea	movelist(a5),a1
+	move	#maxmoves*2+2,d4
+hmbackup:	move	(a1)+,(a0)+
+	subq	#2,d4
+	bne.s	hmbackup
+	bsr	handlemove2
+	bsr	countpath
+	cmp	th_moves(a2),d4
+	bgt.s	hmbad
+	moveq	#0,d4
+	rts
+hmbad:	lea	scratch(a5),a0
+	lea	movelist(a5),a1
+	move	#maxmoves*2+2,d4
+hmrestore:	move	(a0)+,(a1)+
+	subq	#2,d4
+	bne.s	hmrestore
+	moveq	#1,d4
+	rts
+handlemove2:	move.b	th_x+1(a2),movelist2(a5)
+	move.b	th_y+1(a2),movelist2+1(a5)
+	moveq	#-2,d4
+	lea	movelist2(a5),a0
+hms:	cmp	movenum(a5),d4
+	beq.s	hm1
+	cmp.b	(a0),d2
+	bne.s	hmsnext
+	cmp.b	1(a0),d3
+	bne.s	hmsnext
+	addq	#2,d4
+	move	d4,movenum(a5)
+	bra.s	hmdone
+hmsnext:	addq	#2,a0
+	addq	#2,d4
+	bra.s	hms
+hm1:	lea	movelist(a5),a0
+	move	movenum(a5),d4
+	adda	d4,a0
+	move.b	d2,(a0)+
+	move.b	d3,(a0)+
+	addq	#2,d4
+	move	d4,movenum(a5)
+movecomp1:	move	movenum(a5),d4
+	addq	#2,d4
+	lea	movelist2(a5),a0
+movecomp:	cmpi	#6,d4
+	bcs.s	hmdone
+	move.b	(a0)+,d6
+	move.b	(a0)+,d7
+	sub.b	2(a0),d6
+	bpl.s	d6ok
+	neg.b	d6
+d6ok:	sub.b	3(a0),d7
+	bpl.s	d7ok
+	neg.b	d7
+d7ok:	cmpi.b	#2,d6
+	bcc.s	needed
+	cmpi.b	#2,d7
+	bcc.s	needed
+	subq	#4,d4
+mccomp:	move	2(a0),(a0)+
+	subq	#2,d4
+	bne.s	mccomp
+	subq	#2,movenum(a5)
+	bra.s	movecomp1
+needed:	subq	#2,d4
+	bra.s	movecomp
+hmdone:	rts
+
+countpath:	clr	d4
+	move	movenum(a5),d5
+	beq.s	cpdone
+	movem.l	a2/d0-d3,-(a7)
+	bsr	mantoa2
+	move.b	th_flags(a2),xflags(a5)
+	move.b	th_x+1(a2),movelist2(a5)
+	move.b	th_y+1(a2),movelist2+1(a5)
+	lea	movelist(a5),a1
+cplp:	clr	d2
+	clr	d3
+	move.b	(a1)+,d2
+	move.b	(a1)+,d3
+	swap	d4
+	bsr	enterablex
+	beq.s	cpinfinite
+	move	d4,d0
+	swap	d4
+	add	d0,d4
+	cmp.b	-4(a1),d2
+	beq.s	no50up
+	cmp.b	-3(a1),d3
+	beq.s	no50up
+	lsr	#1,d0
+	add	d0,d4
+no50up:	subq	#2,d5
+	bne.s	cplp
+tocpdone:	movem.l	(a7)+,a2/d0-d3
+cpdone:	rts
+cpinfinite:	moveq	#127,d4
+	bra.s	tocpdone
+
+
+ignore:	rts
+
+limit1:	move	#1,limitx(a5)
+	move	#1,limity(a5)
+	rts
+limit4:	bra.s	nolimit
+	move	#4,limitx(a5)
+	move	#4,limity(a5)
+	rts
+nolimit:	move	#6,limitx(a5)
+	move	#4,limity(a5)
+	rts
+
+ccopy:	move.b	(a0)+,(a1)
+	cmpi.b	#13,(a1)+
+	bne.s	ccopy
+	subq	#1,a1
+	rts
+zcopy:	move.b	(a0)+,(a1)+
+	bne.s	zcopy
+	subq	#1,a1
+	rts
+ncopy:	move.b	(a0)+,(a1)+
+	subq	#1,d0
+	bne.s	ncopy
+	rts
+nzcopy:	tst.b	(a0)
+	beq.s	nzdone
+	move.b	(a0)+,(a1)+
+	subq	#1,d0
+	bne.s	nzcopy
+nzdone:	rts
+
+
+;d0=number of minutes to subtract
+subtime:	sub	d0,minutes(a5)
+subh:	tst	minutes(a5)
+	bpl.s	submindone
+	addi	#60,minutes(a5)
+	subq	#1,hours(a5)
+	bra.s	subh
+submindone:	tst	hours(a5)
+	bpl.s	hourspos
+	clr	hours(a5)
+	clr	minutes(a5)
+hourspos:	rts
+
+clearinfo:	lea	alltext+48(a5),a1
+	moveq	#infoheight,d1
+cilpy:	moveq	#16,d0
+cilpx:	clr	(a1)+
+	subq	#1,d0
+	bne.s	cilpx
+	lea	ix*2-16*2(a1),a1
+	subq	#1,d1
+	bne.s	cilpy
+	rts
+noputinfo:	rts
+infoheight:	equ	8
+putinfo:	tst.b	blackout(a5)
+	bne.s	noputinfo
+	tst.b	infoshow(a5)
+	bne.s	noputinfo
+	lea	infomsg(pc),a0
+	lea	scratch(a5),a1
+	bsr	zcopy
+	lea	scratch+49(a5),a1
+	move	currentman(a5),d0
+	bne.s	notleader
+	move.b	whichsquadleader(a5),d0
+	mulu	#sl_size,d0
+	lea	bbram,a0
+	adda	d0,a0
+	clr	d0
+	move.b	sl_rank(a0),d0
+	add	d0,d0
+	lea	ranks(pc),a2
+	adda	d0,a2
+	move.b	(a2)+,(a1)+
+	move.b	(a2)+,(a1)+
+	move.b	#' ',(a1)+
+	lea	sl_name(a0),a0
+	moveq	#slnamelen,d0
+cln:	move.b	(a0),(a1)+
+	addq	#2,a0
+	subq	#1,d0
+	bne.s	cln
+	bra.s	wasleader
+notleader:	lea	names-8(pc),a0
+	lsl	#3,d0
+	adda	d0,a0
+	moveq	#8,d0
+	bsr	ncopy
+wasleader:
+	lea	scratch3(a5),a0
+	bsr	guyfigs
+	moveq	#maxmen,d0
+	lea	scratch+17(a5),a1
+putguys:	move.b	(a0)+,d1
+	move.b	d1,(a1)
+	addi.b	#$10,d1
+	move.b	d1,16(a1)
+	addq	#1,a1
+	subq	#1,d0
+	bne.s	putguys
+
+	bsr	mantoa2
+	lea	scratch+28(a5),a0
+	moveq	#'H',d1
+	move	th_health(a2),d0
+	bsr	twodigs
+	moveq	#'A',d1
+	move	th_ammo(a2),d0
+	bsr	twodigs
+	move.l	a0,-(a7)
+	bsr	countpath
+	move.l	(a7)+,a0
+	moveq	#'M',d1
+	move	th_moves(a2),d0
+	sub	d4,d0
+	bsr	twodigs
+
+	lea	scratch+73(a5),a0
+	moveq	#' ',d1
+	move	hours(a5),d0
+	bsr.s	twodigs
+	suba	#13,a0
+	moveq	#':',d1
+	move	minutes(a5),d0
+	bsr.s	twodigs
+
+	tst.b	insmoke(a5)
+	beq.s	doinspects
+	lea	scratch+6*16(a5),a0
+	bsr	infoup
+	lea	scratch+5*16(a5),a0
+	bsr	infoup
+	bra.s	infofine
+doinspects:	lea	scratch+4*16+1(a5),a1
+	bsr	inspect
+	lea	scratch+6*16+1(a5),a1
+	bsr	inspect2
+	beq.s	infofine
+	lea	scratch+6*16(a5),a0
+	bsr	infoup
+infofine:	lea	scratch(a5),a0
+	lea	alphas(a5),a2
+	lea	alltext+48(a5),a1
+	moveq	#infoheight,d1
+piy:	moveq	#16,d0
+pix:	clr	d2
+	move.b	(a0)+,d2
+	add	d2,d2
+	move	0(a2,d2),(a1)+
+	subq	#1,d0
+	bne.s	pix
+	lea	ix2-32(a1),a1
+	subq	#1,d1
+	bne.s	piy
+	rts
+infoup:	lea	16(a0),a1
+	move.l	(a1)+,(a0)+
+	move.l	(a1)+,(a0)+
+	move.l	(a1)+,(a0)+
+	move.l	(a1)+,(a0)+
+	clr.l	(a0)+
+	clr.l	(a0)+
+	clr.l	(a0)+
+	clr.l	(a0)+
+	rts
+twodigs:	move.b	d1,(a0)+
+	ext.l	d0
+	divu	#10,d0
+	addi.b	#'0',d0
+	move.b	d0,(a0)+
+	swap	d0
+	addi.b	#'0',d0
+	move.b	d0,(a0)+
+	adda	#13,a0
+	rts
+;a0=where to put fig data
+guyfigs:	moveq	#0,d4
+gflp:	move	d4,d0
+	bsr	anymantoa2
+	clr	d0
+	tst	th_floor(a2)
+	bmi.s	isdead
+	move	th_health(a2),d0
+	beq.s	isdead
+;	btst	#th_exited,th_flags(a2)
+;	bne.s	isdead
+	ext.l	d0
+	divu	#14,d0
+	addq	#1,d0
+	cmpi	#8,d0
+	bcs.s	isdead
+	moveq	#7,d0
+isdead:	cmp	currentman(a5),d4
+	bne.s	noadd8
+	addq	#8,d0
+noadd8:	addi	#$80,d0
+	move.b	d0,0(a0,d4)
+	addq	#1,d4
+	cmpi	#maxmen,d4
+	bne.s	gflp
+	rts
+
+
+
+showwhat:	move	lastpick(a5),d0
+	lea	chlist(pc),a2
+	add	d0,d0
+	adda	0(a2,d0),a2
+	bsr.s	putmsg
+	bra	scroll
+clearwhat:	bsr.s	clearmsg
+	bra	show
+;a2=msg
+putmsg:	move.l	a2,a0
+	moveq	#-1,d4
+compwide:	addq.l	#1,d4
+	cmpi.b	#13,(a0)+
+	bne.s	compwide
+
+	moveq	#5,d6
+	moveq	#2,d7
+	moveq	#1,d5
+	moveq	#-1,d3
+	bsr	makebox
+	lea	textbox(a5),a1
+	bra	text
+
+clearmsg:	bsr	clearbox
+	moveq	#5,d6
+	moveq	#2,d7
+	lea	textbox(a5),a1
+	bra	text
+
+
+setactuse:	bsr	pickobject
+	bmi	nocarry
+	subq	#1,d0
+	bcs	ignore
+	bsr	findobjnum
+	move.l	a0,object(a5)
+	bsr	mantoa2
+	bsr	limit4
+	move	obj_what(a0),d0
+	cmp	lastobjused(a5),d0
+	bne.s	noprime
+	move	lastusex(a5),d2
+	move	lastusey(a5),d3
+	bsr	crosshair
+noprime:
+;all the following must go through the cantuse routine for failure, unless they
+;don't require a position (crosshair)
+	cmpi	#c_grenade,d0
+	beq	tryusegrenade
+	cmpi	#c_smoke,d0
+	beq	tryusesmoke
+	cmpi	#c_gravshoes,d0
+	beq	tryusegravsh
+	cmpi	#c_neutron,d0
+	beq	tryuseneutron
+	cmpi	#c_rifle,d0
+	beq	tryuserifle
+	cmpi	#c_pistol,d0
+	beq	tryusepistol
+	cmpi	#c_ammo,d0
+	beq	tryuseammo
+	cmpi	#c_tablet,d0
+	beq	usetablet
+	cmpi	#c_camosuit,d0
+	beq	tryusecamo
+	cmpi	#c_launcher,d0
+	beq	tryuselauncher
+	cmpi	#c_hostage,d0
+	beq	tryusehostage
+	cmpi	#c_datapack,d0
+	beq	tryusedp
+	cmpi	#c_shield,d0
+	beq	tryuseshield
+	cmpi	#c_rocket,d0
+	beq	tryuserocket
+	cmpi	#c_medkit,d0
+	beq	tryusemedkit
+	rts
+
+tryusemedkit:	cmpi	#cost_medkit,th_moves(a2)
+	bcs	error9
+	move	#-1,obj_owner(a0)
+	subi	#cost_medkit,th_moves(a2)
+	addi	#healthmedkit,th_health(a2)
+	cmpi	#100,th_health(a2)
+	bcs.s	medkitdone
+	move	#99,th_health(a2)
+medkitdone:	bra	show
+
+tryuserocket:	move	th_id(a2),d2
+	lea	objects(a5),a0
+	move	#maxobjects,d0
+findlauncher:	tst	obj_floor(a0)
+	bpl.s	flnext
+	cmp	obj_owner(a0),d2
+	bne.s	flnext
+	cmpi	#c_launcher,obj_what(a0)
+	beq.s	gotlauncher
+flnext:	lea	obj_size(a0),a0
+	subq	#1,d0
+	bne.s	findlauncher
+	lea	msg6(pc),a0
+	bra	cantuse
+gotlauncher:	lea	msg7(pc),a0
+	cmpi	#cost_launch,th_moves(a2)
+	bcs	cantuse
+	bra	restuse
+userocket:	move	cxpos(a5),d0
+	move	cypos(a5),d1
+	cmp	th_x(a2),d0
+	bne.s	didfire
+	cmp	th_y(a2),d1
+	bne.s	didfire
+	rts
+didfire:	subi	#cost_launch,th_moves(a2)
+	move	#-1,obj_owner(a0)
+
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	sub	d0,d2
+	sub	d1,d3
+	move	d2,rdx(a5)
+	move	d3,rdy(a5)
+
+	move	d0,xtemp2(a5)
+	move	d1,ytemp2(a5)
+
+	lea	animlist(a5),a1
+	sub	xpos(a5),d0
+	sub	ypos(a5),d1
+	muls	#24,d0
+	muls	#24,d1
+	addi	#xadj*24,d0
+	addi	#yadj*24,d1
+	move	d0,an_x(a1)
+	move	d1,an_y(a1)
+	move	#$23f7,an_fig(a1)
+	move	#1,animnum(a5)
+
+	bsr	direction
+;	mulu	#6,d0
+;	addi	#60*128,d0
+	moveq	#3,d2
+	mulu	d0,d2
+	moveq	#48,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig2
+	bsr	sprites
+	bsr	putsprites
+	bsr	sound10
+	move	#6,xtemp(a5)
+rocketlp:	move	#12,ytemp(a5)
+	move	xtemp2(a5),d2
+	move	ytemp2(a5),d3
+	bsr	addsmoke
+	bsr	locate
+	bsr	enterable3
+	beq.s	detonate
+	sub	rdx(a5),d2
+	sub	rdy(a5),d3
+	cmpi	#bxsize,d2
+	bcc	detonate
+	cmpi	#bysize,d3
+	bcc.s	detonate
+	move	d2,xtemp2(a5)
+	move	d3,ytemp2(a5)
+rocketlp2:	bsr	vb
+	lea	animlist(a5),a0
+	move	rdx(a5),d0
+	move	rdy(a5),d1
+	add	d0,d0
+	add	d1,d1
+	sub	d0,an_x(a0)
+	sub	d1,an_y(a0)
+	bsr	sprites
+	bsr	putsprites
+	subq	#1,ytemp(a5)
+	bne.s	rocketlp2
+	subq	#1,xtemp(a5)
+	bne.s	rocketlp
+detonate:	move	xtemp2(a5),d0
+	move	ytemp2(a5),d1
+	bra	dogrenade
+
+tryusedp:
+tryusehostage:	bra	error4
+tryuseshield:	bra	error5
+
+tryuselauncher:	bra	error3
+tryusecamo:	bra	error2
+
+tryusegravsh:	cmpi	#cost_grav,th_moves(a2)
+	lea	msg19(pc),a0
+	bcs	error
+	subi	#cost_grav,th_moves(a2)
+	bset	#th_float,th_flags(a2)
+	bra	show
+
+usetablet:	addi	#cost_tablet,th_moves(a2)
+	move	#-1,obj_owner(a0)
+	bra	show
+
+tryuseammo:	cmpi	#maxammo,th_ammo(a2)
+	bcc	toomuchammo
+	cmpi	#cost_reload,th_moves(a2)
+	bcs	error1
+	subi	#cost_reload,th_moves(a2)
+	addi	#ammoperpack,th_ammo(a2)
+	move	#-1,obj_owner(a0)
+	bsr	sound11
+	bra	show
+
+
+;a0=proper error msg
+cantuse:	move	th_x(a2),d2
+	move	th_y(a2),d3
+	bsr	crosshair
+	bra	error
+
+restuse:	move	#actuse,action(a5)
+	bra	showwhat
+tryuseneutron:	cmpi	#cost_neutron,th_moves(a2)
+	lea	msg11(pc),a0
+	bcs.s	cantuse
+	bsr	limit4
+	bra.s	restuse
+
+tryusesmoke:	cmpi	#cost_smoke,th_moves(a2)
+	lea	msg12(pc),a0
+	bcs.s	cantuse
+	bsr	limit4
+	bra.s	restuse
+tryusegrenade:	cmpi	#cost_grenade,th_moves(a2)
+	lea	msg10(pc),a0
+	bcs.s	cantuse
+	bsr	limit4
+	bra.s	restuse
+tryusepistol:	cmpi	#cost_pistol,th_moves(a2)
+	lea	msg13(pc),a0
+	bcs.s	cantuse
+	cmpi	#pistolammo,th_ammo(a2)
+	lea	msg14(pc),a0
+	bcs.s	cantuse
+	bsr	limit4
+	bra.s	restuse
+tryuserifle:	cmpi	#cost_rifle,th_moves(a2)
+	lea	msg8(pc),a0
+	bcs.s	cantuse
+	lea	msg15(pc),a0
+	cmpi	#rifleammo,th_ammo(a2)
+	bcs	cantuse
+	bsr	limit4
+	bra.s	restuse
+
+douse:	bsr	clearmsg
+	bsr	show
+	bsr	limit1
+	bsr	mantoa2
+	pea	thisman(pc)
+	move.l	object(a5),a0
+	move	obj_what(a0),lastobjused(a5)
+	move	cxpos(a5),lastusex(a5)
+	move	cypos(a5),lastusey(a5)
+	move	obj_what(a0),d0
+	cmpi	#c_grenade,d0
+	beq	usegrenade
+	cmpi	#c_smoke,d0
+	beq	usesmoke
+	cmpi	#c_neutron,d0
+	beq	useneutron
+	cmpi	#c_rifle,d0
+	beq	userifle
+	cmpi	#c_pistol,d0
+	beq	usepistol
+	cmpi	#c_rocket,d0
+	beq	userocket
+	rts
+usepistol:	subi	#cost_pistol,th_moves(a2)
+	subq	#pistolammo,th_ammo(a2)
+	move	cxpos(a5),d0
+	move	cypos(a5),d1
+	bra	dopistol
+
+userifle:	subi	#cost_rifle,th_moves(a2)
+	subq	#rifleammo,th_ammo(a2)
+	move	cxpos(a5),d0
+	move	cypos(a5),d1
+	bra	dorifle
+
+useneutron:	subi	#cost_neutron,th_moves(a2)
+	move	#-1,obj_owner(a0)
+	move	cxpos(a5),d0
+	move	cypos(a5),d1
+	bra	doneutron
+usesmoke:	subi	#cost_smoke,th_moves(a2)
+	move	#-1,obj_owner(a0)
+	move	cxpos(a5),d0
+	move	cypos(a5),d1
+;do a smokebomb at d0,d1
+dosmoke:	bsr	sound9
+	lea	grenadeoffs(pc),a2
+	moveq	#goffnum,d4
+dosmokelp:	move	(a2)+,d2
+	move	(a2)+,d3
+	add	d0,d2
+	add	d1,d3
+	bsr	addsmoke
+	subq	#1,d4
+	bne.s	dosmokelp
+	bsr	sprites
+	bra	putsprites
+
+usegrenade:	subi	#cost_grenade,th_moves(a2)
+	move	#-1,obj_owner(a0)
+	move	cxpos(a5),d0
+	move	cypos(a5),d1
+	bra	dogrenade
+
+dopistol:	move	#c_pistol,exptype(a5)
+	bsr	sound3
+	bra.s	anygun
+dorifle:	bsr	sound4
+	move	#c_rifle,exptype(a5)
+;d0=x,d1=y,a2=attacking entity
+anygun:	move.l	a2,attacker(a5)
+	move	d0,targx(a5)
+	move	d1,targy(a5)
+
+	sub	th_x(a2),d0
+	sub	th_y(a2),d1
+	muls	#24,d0
+	muls	#24,d1
+	move.l	d0,d6
+	move.l	d1,d7
+	muls	d0,d0
+	muls	d1,d1
+	add.l	d1,d0
+	bsr	sqrt
+	lsl.l	#3,d6
+	lsl.l	#3,d7
+	divs	d0,d6
+	divs	d0,d7
+	move	d6,xtemp(a5)
+	move	d7,ytemp(a5)
+
+	lsr	#3,d0
+	move	d0,tempc(a5)
+
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	sub	xpos(a5),d2
+	sub	ypos(a5),d3
+	muls	#24,d2
+	muls	#24,d3
+	addi	#xadj*24,d2
+	addi	#yadj*24,d3
+	lea	animlist(a5),a1
+	move	d2,an_x(a1)
+	move	d3,an_y(a1)
+	move	#$23f7,an_fig(a1)
+	move	#1,animnum(a5)
+	moveq	#9,d2
+	moveq	#15,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+
+firelp:	bsr	sprites
+	bsr	vb
+	bsr	putsprites
+	move	xtemp(a5),d0
+	move	ytemp(a5),d1
+	add	d0,animlist+an_x(a5)
+	add	d1,animlist+an_y(a5)
+	subq	#1,tempc(a5)
+	bcc.s	firelp
+
+	lea	explodes(a5),a0
+	move	targx(a5),(a0)+
+	move	targy(a5),(a0)+
+	bra	doexplodes
+
+sqrt:	move.l	d0,d1
+	beq.s	sqrtzero
+	moveq	#32,d2
+zcount:	subq	#1,d2
+	rol.l	#1,d0
+	bcc.s	zcount
+	lsr	#1,d2
+	moveq	#0,d0
+	bset	d2,d0
+sqrtlp:	move.l	d1,d2
+	divu	d0,d2
+	andi.l	#$ffff,d2
+	add.l	d0,d2
+	lsr.l	#1,d2
+	cmp.l	d0,d2
+	beq.s	sqrtdone
+	subq.l	#1,d0
+	cmp.l	d0,d2
+	beq.s	sqrtdone
+	move.l	d2,d0
+	bra.s	sqrtlp
+sqrtdone:	rts
+sqrtzero:	moveq	#1,d0
+	rts
+
+
+
+;d2=x,d3=y
+addsmoke:	cmpi	#edge,d2
+	bcc.s	doneaddsmoke
+	cmpi	#edge,d3
+	bcc.s	doneaddsmoke
+	lea	smokelist(a5),a0
+	adda	smokenum(a5),a0
+	move	newsmokes(a5),temp(a5)
+	beq.s	diffsmoke
+compsmoke:	move	floor(a5),a1
+	cmpa	-(a0),a1
+	subq	#4,a0
+	bne.s	nextcompsmoke
+	cmp	2(a0),d3
+	bne.s	nextcompsmoke
+	cmp	(a0),d2
+	beq.s	doneaddsmoke
+nextcompsmoke:	subq	#6,temp(a5)
+	bne.s	compsmoke
+diffsmoke:	lea	smokelist(a5),a0
+	adda	smokenum(a5),a0
+	addq	#6,smokenum(a5)
+	addq	#6,newsmokes(a5)
+	move	d2,(a0)+
+	move	d3,(a0)+
+	move	floor(a5),(a0)+
+doneaddsmoke:	rts
+fixsmoke:	lea	smokelist(a5),a0
+	move.l	a0,a1
+	adda	smokenum(a5),a1
+	move	newsmokes(a5),d0
+	suba	d0,a1
+	clr	newsmokes(a5)
+	move	d0,smokenum(a5)
+	beq	nofixsmoke
+fixsmokelp:	move.l	(a1)+,(a0)+
+	move	(a1)+,(a0)+
+	subq	#6,d0
+	bne.s	fixsmokelp
+nofixsmoke:	rts
+
+doneutron:	move	#c_neutron,exptype(a5)
+	bsr	sound17
+	bra.s	anybomb
+;do a grenade explosion at d0,d1
+dogrenade:	move	#c_grenade,exptype(a5)
+	bsr	sound9
+anybomb:	lea	grenadeoffs(pc),a4
+	lea	explodes(a5),a0
+	moveq	#goffnum,d7
+grenlp:	move	(a4)+,d2
+	move	(a4)+,d3
+	add	d0,d2
+	add	d1,d3
+	cmpi	#bxsize,d2
+	bcc.s	offscale
+	cmpi	#bysize,d3
+	bcc.s	offscale
+	move	d2,(a0)+
+	move	d3,(a0)+
+offscale:	subq	#1,d7
+	bne.s	grenlp
+	bra	doexplodes
+
+;a0=pointer to explodes, do blowups
+doexplodes:	move.l	a0,expoint(a5)
+
+	clr	d7
+	lea	animlist(a5),a1
+	lea	explodes(a5),a2
+	move	xpos(a5),d0
+	move	ypos(a5),d1
+
+exptoanim:	addq	#1,d7
+	move	(a2)+,d2
+	move	(a2)+,d3
+	sub	d0,d2
+	sub	d1,d3
+	muls	#24,d2
+	muls	#24,d3
+	addi	#xadj*24,d2
+	addi	#yadj*24,d3
+	move	d2,an_x(a1)
+	move	d3,an_y(a1)
+	move	#$23f7,an_fig(a1)
+	lea	an_size(a1),a1
+	cmpa.l	a0,a2
+	bcs.s	exptoanim
+	move	d7,animnum(a5)
+
+;	move	#36*128,d0
+	moveq	#0,d2
+	moveq	#0,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	bsr	sprites
+	bsr	putsprites
+	bsr	w9
+;	move	#36*128+6,d0
+	moveq	#3,d2
+	moveq	#0,d3
+	move.l	#$7ee00001,4(a6)
+	bsr	sendfig1
+	bsr	w9
+
+	lea	explodes(a5),a4
+torubble:	move	(a4)+,d2
+	move	(a4)+,d3
+	cmpi	#c_grenade,exptype(a5)
+	bne.s	nodestroyobj
+	bsr	locate
+	clr	d0
+	move.b	(a0),d0
+	lea	rubblemap(pc),a1
+	adda	d0,a1
+	btst	#0,(a1)
+	beq.s	rubblebad
+	move.b	#c_rubble,(a0)
+rubblebad:	bsr	locateobj
+	bne.s	nodestroyobj
+	move	#-1,obj_floor(a0)
+	move	#-1,obj_owner(a0)
+	move	#-1,obj_what(a0)
+nodestroyobj:	bsr	findent
+	bne.s	nohurtent
+	moveq	#hpgrenade,d0
+	cmpi	#c_grenade,exptype(a5)
+	beq.s	hurt
+	moveq	#hppistol,d0
+	cmpi	#c_pistol,exptype(a5)
+	beq.s	hurt
+	moveq	#hprifle,d0
+	cmpi	#c_rifle,exptype(a5)
+	beq.s	hurt
+	moveq	#hpneutron,d0
+	cmpi	#c_neutron,d0
+	beq.s	hurt
+	moveq	#hpstun,d0
+hurt:	bsr	hurtent
+nohurtent:	cmpa.l	expoint(a5),a4
+	bcs.s	torubble
+
+	clr	animnum(a5)
+	bsr	scroll
+w9:	moveq	#30,d7
+w9lp:	bsr	vb
+	subq	#1,d7
+	bne.s	w9lp
+	rts
+w8:	moveq	#5,d7
+w8lp:	bsr	vb
+	subq	#1,d7
+	bne.s	w8lp
+	rts
+
+;a0=entity. Return Z if entity has object D0
+checkhave:	move.l	a0,-(a7)
+	move	th_id(a0),d2
+	move	#maxobjects,d1
+	lea	objects(a5),a0
+checkhavelp:	cmp	obj_owner(a0),d2
+	bne.s	checkhavenext
+	cmp	obj_what(a0),d0
+	beq.s	doeshave
+checkhavenext:	lea	obj_size(a0),a0
+	subq	#1,d1
+	bne.s	checkhavelp
+	moveq	#1,d1
+doeshave:	move.l	(a7)+,a0
+	rts
+
+;a0=entity
+;d0=hitpoints to damage it
+hurtent:	move	d0,-(a7)
+	bsr	rnd
+	andi	#$7f,d0
+	mulu	(a7),d0
+	lsr	#8,d0
+	neg	d0
+	add	d0,(a7)
+	moveq	#c_shield,d0
+	bsr	checkhave
+	bne.s	noshield
+	lsr	(a7)
+noshield:	move	(a7)+,d0
+	sub	d0,th_health(a0)
+	bgt.s	stillalive
+	clr	th_health(a0)
+	bsr	freesprite
+	btst	#th_man,th_flags(a0)
+	beq.s	noscream
+	bsr	sound14
+	bsr	soundwait
+noscream:	move.l	a0,usp
+	move	th_id(a0),d1
+	lea	objects(a5),a0
+	move	#maxobjects,d0
+destroyall:	tst	obj_floor(a0)
+	bpl.s	notheld
+	cmp	obj_owner(a0),d1
+	bne.s	notheld
+	move	#-1,obj_owner(a0)
+notheld:	lea	obj_size(a0),a0
+	subq	#1,d0
+	bne.s	destroyall
+	move.l	usp,a0
+stillalive:	rts
+
+;a0=entity, free its sprite if necessary
+freesprite:	move	th_fig(a0),d0
+	bmi.s	nofreesprite
+	move.l	a0,usp
+	move	#-1,th_fig(a0)
+	andi	#$7ff,d0
+	subi	#startsprites,d0
+	ext.l	d0
+	divu	#9,d0
+	lea	figused(a5),a0
+	adda	d0,a0
+	clr.b	(a0)
+	move.l	usp,a0
+nofreesprite:	rts
+
+
+grenadeoffs:	dc	-1,-1,0,-1,1,-1
+	dc	-1,0,0,0,1,0
+	dc	-1,1,0,1,1,1
+goffnum:	equ	(*-grenadeoffs)/4
+
+pickobject:	lea	scratch2(a5),a0
+	lea	cancelname(pc),a1
+	moveq	#16,d0
+copycancel:	move.b	(a1)+,(a0)+
+	subq	#1,d0
+	bne.s	copycancel
+	move.b	#13,(a0)+
+
+	lea	objects(a5),a1
+;	move	currentman(a5),d4
+	bsr	mantoa2
+	move	th_id(a2),d4
+	move	#maxobjects,d1
+	moveq	#0,d6
+douselp:	cmp	obj_owner(a1),d4
+	bne.s	dousenext
+	addq	#1,d6
+	move	obj_what(a1),d2
+	lsl	#4,d2
+	lea	objnames(pc),a3
+	adda	d2,a3
+	moveq	#16,d2
+copyoname:	move.b	(a3)+,(a0)+
+	subq	#1,d2
+	bne.s	copyoname
+	move.b	#13,(a0)+
+dousenext:	lea	obj_size(a1),a1
+	subq	#1,d1
+	bne.s	douselp
+	clr.b	(a0)+
+	tst	d6
+	beq	noobjects
+	addq	#1,d6
+	moveq	#12,d5
+	cmp	d6,d5
+	bcs.s	d5ok
+	move	d6,d5
+d5ok:	lea	scratch2(a5),a2
+	moveq	#16,d4
+;	moveq	#12,d5
+	moveq	#12,d6
+	moveq	#28,d7
+	sub	d5,d7
+	lsr	#1,d7
+	move	lastused(a5),d3
+	bsr	pick2
+	move	d0,lastused(a5)
+;	tst	d0
+	rts
+noobjects:	moveq	#-1,d0
+	rts
+
+error25:	lea	msg25(pc),a0
+	bra.s	error
+error24:	lea	msg24(pc),a0
+	bra.s	error
+error23:	lea	msg23(pc),a0
+	bra.s	error
+error22:	lea	msg22(pc),a0
+	bra.s	error
+error21:	lea	msg21(pc),a0
+	bra.s	error
+error20:	lea	msg20(pc),a0
+	bra.s	error
+error18:	lea	msg18(pc),a0
+	bra.s	error
+error17:	lea	msg17(pc),a0
+	bra.s	error
+error16:	lea	msg16(pc),a0
+	bra.s	error
+error9:	lea	msg9(pc),a0	;costs xx to use medkit
+	bra.s	error
+error7:	lea	msg7(pc),a0	;costs xx to launch rocket
+	bra.s	error
+error6:	lea	msg6(pc),a0	;need launcher for rocket
+	bra.s	error
+error5:	lea	msg5(pc),a0	;can't use shield
+	bra.s	error
+error4:	lea	msg4(pc),a0	;can't use something
+	bra.s	error
+error3:	lea	msg3(pc),a0	;don't use launcher
+	bra.s	error
+error2:	lea	msg2(pc),a0	;using camo suit
+	bra.s	error
+error1:	lea	msg1(pc),a0	;ammo pack cost
+	bra.s	error
+toomuchammo:	lea	toomuchmsg(pc),a0
+	bra.s	error
+noentererr:	lea	noentermsg(pc),a0
+	bra.s	error
+noammo:	lea	noammomsg(pc),a0
+	bra.s	error
+nomovement:	lea	nomovemsg(pc),a0
+	bra.s	error
+nocarry:	lea	nocarrymsg(pc),a0
+error:	move.l	a0,a2
+	moveq	#10,d6
+	moveq	#12,d7
+	moveq	#20,d4
+	moveq	#4,d5
+msg:	moveq	#-1,d3
+	bsr	makebox
+	lea	textbox(a5),a1
+	bsr	text
+	bsr	pshow
+	bsr	pwait
+	bsr	anywait
+	move	d0,-(a7)
+	bsr	clearbox
+	lea	textbox(a5),a1
+	bsr	text
+	bsr	pshow
+	bsr	pwait
+	move	(a7)+,d0
+	rts
+
+setactdrop:	bsr	pickobject
+	bmi.s	nocarry
+	subq	#1,d0
+	bcs	ignore
+	bsr	findobjnum
+	move.l	a0,object(a5)
+	bsr	limit1
+	move	#actdrop,action(a5)
+	bra	showwhat
+
+nodrop:	bra	clearwhat
+
+dodrop:	move	cxpos(a5),d2
+	move	cypos(a5),d3
+	bsr	locateobj
+	beq.s	nodrop
+	move.l	object(a5),a0
+	move	d2,obj_x(a0)
+	move	d3,obj_y(a0)
+	move	floor(a5),obj_floor(a0)
+	move	#-1,obj_owner(a0)
+	bsr	clearmsg
+	bra	thisman
+
+;a2=entity, return a0=where it is
+locate2:	lea	minus1(pc),a0
+	move	th_floor(a2),d0
+	bmi.s	locate2done
+	tst	th_health(a2)
+	beq.s	locate2done
+	moveq	#bxsize,d1
+	mulu	th_y(a2),d1
+	add	th_x(a2),d1
+	add	d1,d0
+	lea	board(a5),a0
+	adda	d0,a0
+locate2done:	rts
+
+;d2=x,d3=y,return a0=board
+locpos:	move	cxpos(a5),d2
+	move	cypos(a5),d3
+locate:	moveq	#bxsize,d0
+	mulu	d3,d0
+	add	d2,d0
+	lea	board(a5),a0
+	adda	d0,a0
+	adda	floor(a5),a0
+	rts
+
+inspect:	bsr	locpos
+	clr	d0
+	move.b	(a0),d0
+	lea	mpdata(pc),a0
+	adda	d0,a0
+	tst.b	(a0)
+	beq.s	nomp
+	move.b	(a0),(a1)
+	addi.b	#'0',(a1)
+	move.b	#'M',1(a1)
+	move.b	#'P',2(a1)
+nomp:	lea	16(a1),a1
+	lea	tilenames(pc),a0
+	move.l	a1,d4
+	adda	d0,a0
+	adda	d0,a0
+	adda	(a0),a0
+	moveq	#14,d0
+	bsr	nzcopy
+	rts
+
+inspect2:	bsr	locateobj
+	bne.s	noobjhere
+	move	obj_what(a0),d0
+	lsl	#4,d0
+	lea	objnames(pc),a0
+	adda	d0,a0
+	moveq	#14,d0
+	bsr	ncopy
+	clr	d0
+noobjhere:	rts
+
+dolist:	lea	scratch3(a5),a0
+	bsr	guyfigs
+	lea	scratch(a5),a1
+	moveq	#0,d2
+l0:	moveq	#16,d0
+l0a:	move.b	#' ',(a1)+
+	subq	#1,d0
+	bne.s	l0a
+	moveq	#10,d0
+	lea	scratch3(a5),a0
+l0b:	move.b	(a0)+,d1
+	add.b	d2,d1
+	move.b	d1,(a1)+
+	move.b	#' ',(a1)+
+	subq.b	#1,d0
+	bne.s	l0b
+	move.b	#13,-1(a1)
+	addi.b	#$10,d2
+	cmpi.b	#$20,d2
+	bne.s	l0
+
+	lea	scratch2+512(a5),a0
+	moveq	#0,d0
+l4:	st	(a0)+
+	subq.b	#1,d0
+	bne.s	l4
+	moveq	#0,d4
+l5:	lea	scratch3(a5),a0
+	adda	d4,a0
+	move.b	(a0),d0
+	andi	#7,d0
+	beq.s	l5a
+	move	d4,d0
+	bsr	anymantoa2
+
+	lea	scratch2+512(a5),a0
+	adda	th_id(a2),a0
+	move.b	d4,(a0)
+l5a:	addq	#1,d4
+	cmpi	#maxmen,d4
+	bne.s	l5
+
+	lea	scratch2(a5),a0
+	moveq	#50,d0
+l1:	clr.l	(a0)+
+	clr.l	(a0)+
+	clr	(a0)+
+	subq	#1,d0
+	bne.s	l1
+
+	lea	objects(a5),a0
+	move	#maxobjects,d4
+l2:	tst	obj_floor(a0)
+	bpl.s	l2next
+	move	obj_owner(a0),d1
+	bmi.s	l2next
+	lea	scratch2+512(a5),a2
+	adda	d1,a2
+	move.b	(a2),d1
+	bmi.s	l2next
+	lea	scratch2(a5),a2
+	adda	d1,a2
+	move	obj_what(a0),d1
+	mulu	#10,d1
+	adda	d1,a2
+	addq.b	#1,(a2)
+l2next:	lea	obj_size(a0),a0
+	subq	#1,d4
+	bne.s	l2
+	lea	listlist(pc),a2
+l3:	clr	d0
+	move.b	(a2)+,d0
+	move	d0,d1
+	lsl	#4,d1
+	lea	objnames(pc),a0
+	adda	d1,a0
+	moveq	#16,d1
+l3a:	move.b	(a0)+,(a1)+
+	subq	#1,d1
+	bne.s	l3a
+	mulu	#10,d0
+	lea	scratch2(a5),a0
+	adda	d0,a0
+	moveq	#0,d0
+l3b:	lea	scratch3(a5),a3
+	move.b	0(a3,d0),d2
+	moveq	#' ',d1
+	andi	#7,d2
+	beq.s	spcok
+	moveq	#'*',d1
+spcok:	tst.b	(a0)+
+	beq.s	l3c
+	moveq	#'0',d1
+	add.b	-1(a0),d1
+	cmpi.b	#'9'+1,d1
+	bcs.s	l3c
+	moveq	#'9',d1
+l3c:	move.b	d1,(a1)+
+	move.b	#' ',(a1)+
+	addq	#1,d0
+	cmpi	#maxmen,d0
+	bne.s	l3b
+	move.b	#13,-1(a1)
+	tst.b	(a2)
+	bpl.s	l3
+	clr.b	(a1)
+	lea	scratch(a5),a2
+	moveq	#2,d6
+	moveq	#8,d7
+	moveq	#35,d4
+	moveq	#numlist+2,d5
+	bra	msg
+
+
+
+
+
+
+showorders:	lea	scratch(a5),a1
+	lea	vmh(pc),a0
+	bsr	zcopy
+	move.b	vcond(a5),d7
+	ror	#1,d7
+	bcc.s	vt1
+;rescue prisoners
+	lea	vm0(pc),a0
+	bsr	zcopy
+	lea	vp0(pc),a0
+	move.b	hostages1(a5),d0
+	move.b	hostages2(a5),d1
+	bsr	slash
+vt1:	ror	#1,d7
+	bcc.s	vt2
+;recover datapacks
+	lea	vm1(pc),a0
+	bsr	zcopy
+	lea	vp1(pc),a0
+	move.b	datapacks1(a5),d0
+	move.b	numdatapacks(a5),d1
+	bsr	slash
+vt2:	ror	#1,d7
+	bcc.s	vt3
+;exit combat area
+	lea	vm2(pc),a0
+	bsr	zcopy
+	lea	vp2(pc),a0
+	bsr	zcopy
+	move.b	active1(a5),d0
+	bsr	dec100
+	move.b	#13,(a1)+
+vt3:	ror	#1,d7
+	bcc.s	vt4
+;kill %
+	lea	vm3a(pc),a0
+	bsr	zcopy
+	move.b	killpercent(a5),d0
+	bsr	dec100
+	lea	vm3b(pc),a0
+	bsr	zcopy
+	lea	vp3(pc),a0
+	move.b	enemies1(a5),d0
+	move.b	numenemies(a5),d1
+	bsr	slash
+vt4:	ror	#1,d7
+	bcc.s	vt5
+;destroy datapacks
+	lea	vm4(pc),a0
+	bsr	zcopy
+	lea	vp4(pc),a0
+	move.b	datapacks2(a5),d0
+	move.b	numdatapacks(a5),d1
+	sub.b	d1,d0
+	neg.b	d0
+	bsr	slash
+vt5:	ror	#1,d7
+	bcc.s	vt6
+;occupy squares
+	lea	vm5(pc),a0
+	bsr	zcopy
+	lea	vp5(pc),a0
+	move.b	occupy1(a5),d0
+	move.b	occupynumber(a5),d1
+	bsr	slash
+vt6:	clr.b	(a1)+
+	lea	scratch(a5),a2
+	moveq	#24,d4
+	moveq	#10,d5
+	moveq	#8,d6
+	moveq	#9,d7
+	bra	msg
+slash:	bsr	zcopy
+	bsr.s	dec100
+	move.b	#'/',(a1)+
+	move	d1,d0
+	bsr.s	dec100
+	move.b	#13,(a1)+
+	rts
+dec100:	andi.l	#$ff,d0
+	divu	#10,d0
+	tst	d0
+	beq.s	no10
+	addi.b	#'0',d0
+	move.b	d0,(a1)+
+no10:	swap	d0
+	addi.b	#'0',d0
+	move.b	d0,(a1)+
+	rts
+
+
+usedoor:	bsr	mantoa2
+	cmpi	#cost_door,th_moves(a2)
+	bcs	error20
+	move	#actdoor,action(a5)
+	bsr	limit1
+	bra	showwhat
+dodoor:	bsr	clearmsg
+	move	cxpos(a5),d2
+	move	cypos(a5),d3
+	bsr	locate
+	move.b	(a0),d0
+	cmpi.b	#doors1s,d0
+	bcs.s	dd1
+	cmpi.b	#doors1e,d0
+	bcs.s	isdoor1
+dd1:	cmpi.b	#doors2s,d0
+	bcs.s	dd2
+	cmpi.b	#doors2e,d0
+	bcs.s	isdoor2
+dd2:	bsr	error21
+	bra	crossback
+isdoor2:	addi.b	#doors1s-doors2s,(a0)
+	bra.s	isdoor
+isdoor1:	addi.b	#doors2s-doors1s,(a0)
+isdoor:	bsr	mantoa2
+	subi	#cost_door,th_moves(a2)
+	bsr	thisman
+	bra	sound12
+
+
+setacttake:	move	#acttake,action(a5)
+	bsr	limit1
+	bra	showwhat
+dotake:	move	cxpos(a5),d2
+	move	cypos(a5),d3
+	bsr	locateobj
+	bne.s	notake
+	move	#-1,obj_floor(a0)
+	bsr	mantoa2
+	move	th_id(a2),obj_owner(a0)
+;	move	currentman(a5),obj_owner(a0)
+notake:	bsr	clearmsg
+	bra	thisman
+
+;d0=number of object owned by current man
+findobjnum:	lea	objects(a5),a0
+	move	floor(a5),d1
+	bsr	mantoa2
+	move	th_id(a2),d2
+;	move	currentman(a5),d2
+	move	#maxobjects,d3
+fonlp:	cmp	obj_owner(a0),d2
+	bne.s	fonnext
+	subq	#1,d0
+	bcc.s	fonnext
+	moveq	#0,d0
+	rts
+fonnext:	lea	obj_size(a0),a0
+	subq	#1,d3
+	bne.s	fonlp
+	moveq	#1,d0
+	rts
+
+;d2=x,d3=y
+;return a0=object if found and on this level
+;otherwize return NZ
+locateobj:	lea	objects(a5),a0
+	move	floor(a5),d1
+	move	#maxobjects,d0
+lolp:	cmp	obj_floor(a0),d1
+	bne.s	lonext
+	cmp	obj_x(a0),d2
+	bne.s	lonext
+	cmp	obj_y(a0),d3
+	beq.s	lofound
+lonext:	lea	obj_size(a0),a0
+	subq	#1,d0
+	bne.s	lolp
+	moveq	#1,d0
+lofound:	rts
+
+;Z means a rocket cannot go there
+enterable3a:	bsr	locpos
+enterable3:	clr	d0
+	move.b	(a0),d0
+	cmpi.b	#waterlow,d0
+	bcs.s	checkent
+	cmpi.b	#waterhigh,d0
+	bcs.s	nocheckent
+checkent:	lea	mpdata(pc),a0
+	adda	d0,a0
+	clr	d4
+	move.b	(a0),d4
+	beq.s	ent3done
+nocheckent:	move	#1,d4
+	bsr	findent
+ent3done:	rts
+
+enterablex:	bsr	locate
+	btst	#th_float,xflags(a5)
+	bne.s	enterable3
+	bra.s	enterable2
+;Z means cannot enter d2,d3
+;return d4=number of movement points
+enterable:	bsr	locpos
+enterable2:	clr	d0
+	move.b	(a0),d0
+	lea	mpdata(pc),a0
+	adda	d0,a0
+	clr	d4
+	move.b	(a0),d4
+	bne.s	findent
+	rts
+;d2=x,d3=y, return Z if entity there, a0 points to it
+findent:	moveq	#numthings,d0
+	lea	things(a5),a0
+thent:	btst	#th_entity,th_flags(a0)
+	beq.s	nextthent
+;	btst	#th_exited,th_flags(a0)
+;	bne.s	nextthent
+	tst	th_health(a0)
+	beq.s	nextthent
+	move	floor(a5),d1
+	cmp	th_floor(a0),d1
+	bne.s	nextthent
+	cmp	th_x(a0),d2
+	bne.s	nextthent
+	cmp	th_y(a0),d3
+	bne.s	nextthent
+	rts
+nextthent:	lea	th_size(a0),a0
+	subq	#1,d0
+	bne.s	thent
+	moveq	#1,d0
+	rts
+
+noenter:	bsr	thisman
+	bra	noentererr
+cantmove:	bsr	thisman
+	bra	nomovement
+moveguy:	bsr	mantoa2
+;	btst	#th_float,th_flags(a2)
+;	beq.s	notfloating
+;	bsr	enterable3a
+;	bra.s	isfloating
+;notfloating:	bsr	enterable
+;isfloating:	beq.s	noenter
+;	bsr	mantoa2
+;	move	th_x(a2),d0
+;	cmp	cxpos(a5),d0
+;	beq.s	no50up
+;	move	th_y(a2),d0
+;	cmp	cypos(a5),d0
+;	beq.s	no50up
+;	move	d4,d0
+;	lsr	#1,d0
+;	add	d0,d4
+;no50up:	cmp	th_moves(a2),d4
+;	bgt.s	cantmove
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	sub	cxpos(a5),d2
+	sub	cypos(a5),d3
+;	move	d2,d0
+;	or	d3,d0
+;	beq	ignore
+
+	bsr	countpath
+	clr	movenum(a5)
+
+	clr	lastused(a5)
+	move	#-1,lastobjused(a5)
+	sub	d4,th_moves(a2)
+	bsr	direction
+	move	d0,th_direction(a2)
+	move	cxpos(a5),d2
+	move	cypos(a5),d3
+	move	d2,th_x(a2)
+	move	d3,th_y(a2)
+	move	d2,xpos(a5)
+	move	d3,ypos(a5)
+	bsr	fixthing
+	bsr	nocrosshair2
+;	bsr	putinfo
+	bra	scroll
+
+
+;d2=dx,d3=dy,return d0=0-7
+direction:	tst	d2
+	beq.s	vertical
+	tst	d3
+	beq.s	horizontal
+	bmi.s	lowerhalf
+	moveq	#7,d0
+	tst	d2
+	bpl.s	gotdir
+	moveq	#1,d0
+	bra.s	gotdir
+lowerhalf:	moveq	#5,d0
+	tst	d2
+	bpl.s	gotdir
+	moveq	#3,d0
+	bra.s	gotdir
+
+horizontal:	moveq	#6,d0
+	tst	d2
+	bpl.s	gotdir
+	moveq	#2,d0
+	bra.s	gotdir
+vertical:	moveq	#0,d0
+	tst	d3
+	bpl.s	gotdir
+	moveq	#4,d0
+gotdir:	rts
+
+showmap:	move.b	infoshow(a5),-(a7)
+	st	infoshow(a5)
+	bsr	clearinfo
+	lea	scratch(a5),a0
+	move	#bxsize*bysize,d0
+sm1:	clr	(a0)+
+	subq	#2,d0
+	bne.s	sm1
+	bsr	mantoa2
+	move.l	a2,a0
+	moveq	#c_detector,d0
+	bsr	checkhave
+	bne.s	nodetector
+	lea	scratch(a5),a0
+	lea	things(a5),a1
+	moveq	#numthings,d1
+mth:	btst	#th_used,th_flags(a1)
+	beq.s	mthnext
+	btst	#th_entity,th_flags(a1)
+	beq.s	mthnext
+	tst	th_health(a1)
+	beq.s	mthnext
+	tst	th_floor(a1)
+	bmi.s	mthnext
+	move	th_x(a1),d2
+	move	th_y(a1),d3
+	mulu	#bxsize,d3
+	add	d3,d2
+	move.b	#'o',0(a0,d2)
+	btst	#th_man,th_flags(a1)
+	beq.s	mthnext
+	move.b	#'n',0(a0,d2)
+mthnext:	lea	th_size(a1),a1
+	subq	#1,d1
+	bne.s	mth
+nodetector:
+
+	lea	board(a5),a0
+	lea	scratch(a5),a3
+	adda	floor(a5),a0
+	move	xpos(a5),d0
+	subi	#mapsizex/2,d0
+	move	d0,xtemp2(a5)
+	move	ypos(a5),d1
+	subi	#mapsizey/2,d1
+	move	d1,ytemp2(a5)
+	muls	#bxsize,d1
+	add	d1,d0
+	adda	d0,a0
+	adda	d0,a3
+	lea	scratch2(a5),a1
+	lea	mmap(pc),a2
+	moveq	#mapsizey,d3
+	move	ytemp2(a5),ytemp(a5)
+smy:	moveq	#mapsizex,d2
+	move	xtemp2(a5),xtemp(a5)
+smx:	moveq	#$17,d0
+	cmpi	#bxsize,xtemp(a5)
+	bcc.s	smoutside
+	cmpi	#bysize,ytemp(a5)
+	bcc.s	smoutside
+	move.b	(a3),d0
+	bne.s	smoutside
+	move.b	(a0),d0
+	bpl.s	d0ok
+	moveq	#$14,d0
+	bra.s	smoutside
+d0ok:	move.b	0(a2,d0),d0
+	addi.b	#$10,d0
+smoutside:	move.b	d0,(a1)+
+	addq	#1,a0
+	addq	#1,a3
+	addq	#1,xtemp(a5)
+	subq	#1,d2
+	bne.s	smx
+	lea	bxsize-mapsizex(a0),a0
+	lea	bxsize-mapsizex(a3),a3
+	move.b	#13,(a1)+
+	addq	#1,ytemp(a5)
+	subq	#1,d3
+	bne.s	smy
+	clr.b	(a1)+
+	lea	scratch2(a5),a2
+	moveq	#mapsizex,d4
+	moveq	#mapsizey,d5
+	moveq	#-1,d3
+	bsr	makebox
+	lea	textbox(a5),a1
+	moveq	#4,d6
+	moveq	#3,d7
+	bsr	text
+	bsr	pshow
+	bsr	pwait
+	bsr	anywait
+	bsr	clearbox
+	lea	textbox(a5),a1
+	bsr	text
+	move.b	(a7)+,infoshow(a5)
+	bsr	pshow
+	bra	pwait
+
+
+uselift:	bsr	mantoa2
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	bsr	locate
+	cmpi.b	#33,(a0)
+	beq.s	liftup
+	cmpi.b	#32,(a0)
+	beq.s	liftdown
+	bra	error16
+liftup:	cmpi	#cost_lift,th_moves(a2)
+	bcs	error18
+	addi	#bxsize*bysize,floor(a5)
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	bsr	enterable
+	beq.s	liftbad
+	addi	#bxsize*bysize,th_floor(a2)
+	move	th_floor(a2),floor(a5)
+	subi	#cost_lift,th_moves(a2)
+	bsr	sound13
+	bra	scroll
+liftdown:	cmpi	#cost_lift,th_moves(a2)
+	bcs	error18
+	subi	#bxsize*bysize,floor(a5)
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	bsr	enterable
+	beq.s	liftbad
+	subi	#bxsize*bysize,th_floor(a2)
+	move	th_floor(a2),floor(a5)
+	subi	#cost_lift,th_moves(a2)
+	bsr	sound13
+	bra	scroll
+liftbad:	move	th_floor(a2),floor(a5)
+	bra	error17
+
+showbrief:
+briefing:	move.b	whichmission(a5),d0
+	bsr	locarray
+	lea	l_brief(a0),a0
+	lea	brieflen(a0),a1
+	lea	scratch(a5),a2
+cby:	moveq	#36,d0
+cbx:	cmpa.l	a1,a0
+	bcc.s	copybdone
+	move.b	(a0)+,(a2)
+	beq.s	copybdone
+	addq	#1,a2
+	subq	#1,d0
+	bne.s	cbx
+	move.b	#13,(a2)+
+	bra.s	cby
+copybdone:	move.b	#13,(a2)+
+	clr.b	(a2)
+
+	lea	scratch(a5),a2
+	moveq	#1,d6
+	moveq	#8,d7
+	moveq	#36,d4
+	moveq	#15,d5
+	moveq	#-1,d3
+	bsr	makebox
+	lea	textbox(a5),a1
+	bsr	text
+	bsr	pshow
+	bsr	pwait
+	bsr	anywait
+	bsr	clearbox
+	lea	textbox(a5),a1
+	bsr	text
+	bsr	pshow
+	bra	pwait
+
+;return Z if something is on the entry square
+entoccupied:	lea	things(a5),a0
+	moveq	#numthings,d0
+entocclp:	btst	#th_entity,th_flags(a0)
+	beq.s	entoccnext
+	move	enterx(a5),d1
+	cmp	th_x(a0),d1
+	bne.s	entoccnext
+	move	entery(a5),d1
+	cmp	th_y(a0),d1
+	bne.s	entoccnext
+	move	enterfloor(a5),d1
+	cmp	th_floor(a0),d1
+	bne.s	entoccnext
+	rts
+entoccnext:	lea	th_size(a0),a0
+	subq	#1,d0
+	bne.s	entocclp
+	moveq	#1,d0
+	rts
+
+
+;go to next man in list
+nmtry:	bsr	mantoa2
+	tst	th_floor(a2)
+	bpl.s	nmtry1
+	btst	#th_exited,th_flags(a2)
+	bne.s	nextman
+	bsr	entoccupied
+	beq.s	nextman
+	move	enterx(a5),th_x(a2)
+	move	entery(a5),th_y(a2)
+	move	enterfloor(a5),th_floor(a2)
+	bra	changeman
+nmtry1:	tst	th_health(a2)
+	bne.s	changeman
+nextman:	subq	#1,currentman(a5)
+	bcc.s	nmtry
+	move	#maxmen-1,currentman(a5)
+	bra.s	nmtry
+pmtry:	bsr	mantoa2
+	tst	th_floor(a2)
+	bpl.s	pmtry1
+	btst	#th_exited,th_flags(a2)
+	bne.s	prevman
+	bsr	entoccupied
+	beq.s	prevman
+	move	enterx(a5),th_x(a2)
+	move	entery(a5),th_y(a2)
+	move	enterfloor(a5),th_floor(a2)
+	bra	changeman
+pmtry1:	tst	th_health(a2)
+	bne.s	changeman
+prevman:	addq	#1,currentman(a5)
+	cmpi	#maxmen,currentman(a5)
+	bcs.s	pmtry
+	clr	currentman(a5)
+	bra.s	pmtry
+changeman:	bsr.s	abort
+;display centered at current man
+thisman:	bsr	nocrosshair2
+	bsr	mantoa2
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	move	th_floor(a2),floor(a5)
+	move	d2,xpos(a5)
+	move	d3,ypos(a5)
+	bsr	crosshair
+	bsr.s	setinsmoke
+	bra	scroll
+crossback:	bsr	mantoa2
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	bsr	crosshair
+	bra	scroll
+abort:	bsr	limit4
+	clr	lastused(a5)
+	clr	movenum(a5)
+	move	#-1,lastobjused(a5)
+	cmpi	#actmove,action(a5)
+	beq.s	noclearmsg
+	bsr	clearmsg
+noclearmsg:	bsr	nocrosshair2
+	move	#actmove,action(a5)
+	rts
+setinsmoke:	bsr	mantoa2
+	move.b	insmoke(a5),d1
+	move	th_x(a2),d2
+	move	th_y(a2),d3
+	move	th_floor(a2),d4
+	lea	smokelist(a5),a0
+	move	smokenum(a5),d0
+	add	newsmokes(a5),d0
+	beq.s	notinsmoke
+checksmoke:	cmp	(a0),d2
+	bne.s	chsmnext
+	cmp	2(a0),d3
+	bne.s	chsmnext
+	cmp	4(a0),d4
+	bne.s	chsmnext
+	st	insmoke(a5)
+	bra.s	isinsmoke
+chsmnext:	addq	#6,a0
+	subq	#1,d0
+	bne.s	checksmoke
+notinsmoke:	clr.b	insmoke(a5)
+isinsmoke:	cmp.b	insmoke(a5),d1
+	rts
+mantoa2:	move.l	d0,-(a7)
+	move	currentman(a5),d0
+	bsr.s	anymantoa2
+	move.l	(a7)+,d0
+	rts
+anymantoa2:	lea	things(a5),a2
+am2a2lp:	btst	#th_man,th_flags(a2)
+	beq.s	am2a2next
+	subq	#1,d0
+	bcs.s	am2a2done
+am2a2next:	lea	th_size(a2),a2
+	bra.s	am2a2lp
+am2a2done:	rts
+
+;	mulu	#th_size,d0
+;	lea	things+th_size*2(a5),a2
+;	adda	d0,a2
+;	rts
+
+nocrosshair2:	moveq	#-50,d2
+	moveq	#-50,d3
+crosshair2:	move	d2,things+th_size+th_x(a5)
+	move	d3,things+th_size+th_y(a5)
+	rts
+nocrosshair:	moveq	#-50,d2
+	moveq	#-50,d3
+crosshair:	move	d2,cxpos(a5)
+	move	d3,cypos(a5)
+	move	d2,things+th_x(a5)
+	move	d3,things+th_y(a5)
+	rts
+
+
+vb:	move	d0,-(a7)
+	move	clock(a5),d0
+vbw:	cmp	clock(a5),d0
+	beq.s	vbw
+	move	(a7)+,d0
+vbexit:	rts
+
+;d0=mission #
+;return a0 points to data
+locarray:	move.l	flevel(a5),a0
+lalp:	subq.b	#1,d0
+	bcs.s	ladone
+	adda.l	-4(a0),a0
+	bra.s	lalp
+ladone:	rts
+
+realarray:
+	clr	smokenum(a5)
+	clr	newsmokes(a5)
+
+	move.b	whichmission(a5),d0
+	bsr	locarray
+	move.l	a0,alevel(a5)
+
+
+
+;	lea	mmap(a5),a0
+;	moveq	#0,d0
+;mmaplp:	move	d0,d1
+;	andi	#$f,d1
+;	bne.s	d1fine
+;	addq	#1,d1
+;d1fine:	addi	#16,d1
+;	move.b	d1,(a0)+
+;	addq	#1,d0
+;	cmpi	#256,d0
+;	bne.s	mmaplp
+
+
+	clr.b	numhostages(a5)
+	clr.b	numdatapacks(a5)
+	clr.b	numoccupies(a5)
+	clr.b	numenemies(a5)
+
+	move.l	alevel(a5),a2
+	lea	board(a5),a0
+	moveq	#0,d4
+raf:	moveq	#0,d3
+ray:	moveq	#0,d2
+rax:	move.b	(a2)+,d0
+	cmpi.b	#29,d0
+	bne.s	nosetstart
+	move	d2,enterx(a5)
+	move	d3,entery(a5)
+	move	d4,enterfloor(a5)
+nosetstart:	move.b	d0,(a0)+
+	addq	#1,d2
+	cmpi	#bxsize,d2
+	bne.s	rax
+	addq	#1,d3
+	cmpi	#bysize,d3
+	bne.s	ray
+	addi	#bxsize*bysize,d4
+	cmpi	#bxsize*bysize*5,d4
+	bcs.s	raf
+
+
+	move	#12,hours(a5)
+	clr	minutes(a5)
+
+;	move	#5,enterx(a5)
+;	move	#3,entery(a5)
+
+	lea	things(a5),a0
+	move	enterx(a5),d0
+	move	entery(a5),d1
+	move	d0,th_x(a0)
+	move	d1,th_y(a0)
+	move	#$2400,th_fig(a0)
+	move.b	#1<<th_used,th_flags(a0)
+	lea	th_size(a0),a0
+
+	move	#-50,th_x(a0)
+	move	#-50,th_y(a0)
+	move	#$2409,th_fig(a0)
+	move.b	#1<<th_used,th_flags(a0)
+	lea	th_size(a0),a0
+
+	move	enterx(a5),th_x(a0)
+	move	entery(a5),th_y(a0)
+	move	enterfloor(a5),th_floor(a0)
+	move	#characters,th_what(a0)
+	move	#-1,th_fig(a0)
+	move	#4,th_direction(a0)
+	move.b	#1<<th_man+1<<th_used+1<<th_entity,th_flags(a0)
+	move	#99,th_health(a0)
+	move	#20,th_ammo(a0)
+	move	#25,th_moves(a0)
+	move	#255,th_id(a0)
+	lea	th_size(a0),a0
+
+	move.l	alevel(a5),a1
+	lea	l_objects(a1),a1
+	move	#maxobjectsin,d1
+;	move	#$6412,d5
+;	moveq	#10,d2
+initthings:	tst.b	o_x(a1)
+	bmi	itnext
+	move.b	o_what(a1),d0
+	cmpi.b	#characters,d0
+	bcs.s	itnext
+	cmpi.b	#endch,d0
+	bcc.s	itnext
+	clr	d0
+	move.b	o_x(a1),d0
+	move	d0,th_x(a0)
+	move.b	o_y(a1),d0
+	move	d0,th_y(a0)
+	move.b	o_owner(a1),d0
+	move	d0,th_id(a0)
+	move.b	o_what(a1),d0
+	move	d0,th_what(a0)
+	move	o_floor(a1),th_floor(a0)
+	move	#-1,th_fig(a0)
+	move	#4,th_direction(a0)
+	move.b	#1<<th_used+1<<th_entity,th_flags(a0)
+	clr.b	th_flags+1(a0)
+	move	#99,th_health(a0)
+	move	#20,th_ammo(a0)
+	move	#25,th_moves(a0)
+	cmpi.b	#characters,o_what(a1)
+	bne.s	notguy
+	bset	#th_man,th_flags(a0)
+	move	#-1,th_floor(a0)
+	bra.s	aguy
+notguy:	addq.b	#1,numenemies(a5)
+	move	#enemyhp,th_health(a0)
+aguy:	lea	th_size(a0),a0
+;	subq	#1,d2
+;	beq.s	got10
+itnext:	lea	o_size(a1),a1
+	subq	#1,d1
+	bne	initthings
+
+	move.l	alevel(a5),a1
+	moveq	#0,d0
+	move.b	l_vcond(a1),vcond(a5)
+	move.b	l_killpercent(a1),killpercent(a5)
+	move	l_timelimit(a1),timelimit(a5)
+	move.b	l_occupynumber(a1),d0
+	move.b	d0,occupynumber(a5)
+
+
+;	move	#$6412,d5
+;	moveq	#10,d2
+;	moveq	#99,d7
+;initthings2:	clr	th_x(a0)
+;	clr	th_y(a0)
+;	move	d5,th_fig(a0)
+;	addi	#9,d5
+;	bclr	#th_used,th_flags(a0)
+;	move	#-1,th_id(a0)
+;	move	d7,th_health(a0)
+;	subi	#9,d7
+;	move	#20,th_ammo(a0)
+;	move	#25,th_moves(a0)
+;	lea	th_size(a0),a0
+;	subq	#1,d2
+;	bne.s	initthings2
+;got10:
+
+	move.l	alevel(a5),a2
+	lea	l_objects(a2),a2
+	lea	objects(a5),a0
+	move	#maxobjects,d5
+	move	#maxobjectsin,d4
+putobjs:	clr	d0
+	move.b	o_x(a2),d0
+	bmi.s	nextobj
+	cmpi.b	#characters,o_what(a2)
+	bcs.s	notaguy
+	cmpi.b	#endch,o_what(a2)
+	bcs.s	nextobj
+notaguy:	move	d0,obj_x(a0)
+	move.b	o_y(a2),d0
+	move	d0,obj_y(a0)
+	move.b	o_what(a2),d0
+	move	d0,obj_what(a0)
+	move	o_floor(a2),obj_floor(a0)
+	move.b	o_owner(a2),d0
+	move	d0,obj_owner(a0)
+	beq.s	floorok
+	move	#-1,obj_floor(a0)
+floorok:	move	obj_what(a0),d0
+	cmpi.b	#c_datapack,d0
+	bne.s	noincdp
+	addq.b	#1,numdatapacks(a5)
+noincdp:	cmpi.b	#c_hostage,d0
+	bne.s	noinchost
+	addq.b	#1,numhostages(a5)
+noinchost:	lea	obj_size(a0),a0
+	subq	#1,d5
+nextobj:	lea	o_size(a2),a2
+	subq	#1,d4
+	bne.s	putobjs
+	tst	d5
+	beq.s	filledrest
+	moveq	#-1,d0
+fillrestobj:	move	d0,obj_floor(a0)
+	move	d0,obj_owner(a0)
+	lea	obj_size(a0),a0
+	subq	#1,d5
+	bne.s	fillrestobj
+filledrest:
+
+	clr	floor(a5)
+	clr	animnum(a5)
+
+	rts
+menoffs:	dc.b	0,0,-1,-1,1,0,1,0,-2,1,2,0
+	dc.b	-2,1,1,0,1,0,-1,1
+
+wait3:	move	#180,d2
+	bra.s	wait1lp
+wait1:	move	#120,d2
+wait1lp:	bsr	porta
+	bne.s	wdone
+	bsr	vb
+	subq	#1,d2
+	bne.s	wait1lp
+wdone:	rts
+;d0=resource #, put centered in A plane
+showpic:	move	d0,d6
+	bsr	setup
+	lea	display(a5),a0
+	move	#vx*28,d0
+fd:	clr	(a0)+
+	subq	#1,d0
+	bne.s	fd
+	move	d6,d0
+	bsr	locres
+	clr	d2
+	clr	d3
+	move.b	res_width(a0),d2
+	move.b	res_height(a0),d3
+	moveq	#40,d0
+	sub	d2,d0
+	lsr	#1,d0
+	moveq	#28,d1
+	sub	d3,d1
+	lsr	#1,d1
+	mulu	#vx,d1
+	add	d1,d0
+	add	d0,d0
+	lea	display(a5),a1
+	adda	d0,a1
+	lea	res_array(a0),a0
+pcy:	move	d2,d4
+pcx:	move	(a0)+,(a1)
+	addq	#1,(a1)+
+	subq	#1,d4
+	bne.s	pcx
+	suba	d2,a1
+	suba	d2,a1
+	adda	#vx*2,a1
+	subq	#1,d3
+	bne.s	pcy
+	bsr	senddisplay
+	move	d6,d0
+	bsr	sendtiles
+;	move	#$c000,4(a6)
+	move	d6,d0
+	bsr	locres
+	lea	res_colors(a0),a0
+	lea	colorsave(a5),a1
+	moveq	#16,d1
+cclp:	move	(a0)+,(a1)+
+	subq	#1,d1
+	bne.s	cclp
+;	move	d6,d0
+;	bsr	sendcolors
+	bsr	vb
+	move	#$8174,4(a6)
+	rts
+
+senddisplay:	move.l	#$40000003,d0
+	move.l	#$00800000,d1
+	lea	display(a5),a2
+	moveq	#28,d7
+shlpy:	move.l	d0,4(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	move.l	(a2)+,(a6)
+	addq	#ix2-80,a2
+	add.l	d1,d0
+	subq	#1,d7
+	bne.s	shlpy
+	rts
+
+
+
+
+;d0=resource # in gfx
+sendtiles:	bsr	locres
+	move	(a0),d0
+	clr	d1
+	move.b	res_width(a0),d1
+	clr	d2
+	move.b	res_height(a0),d2
+	mulu	d2,d1
+	add	d1,d1
+	lea	res_array(a0),a0
+	adda	d1,a0
+	move.l	#$40200000,4(a6)
+stlp:	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	subq	#1,d0
+	bne.s	stlp
+	rts
+
+;d0=resource # in gfx
+sendcolors:	bsr	locres
+	lea	res_colors(a0),a0
+	moveq	#16,d1
+sclp:	move	(a0)+,(a6)
+	subq	#1,d1
+	bne.s	sclp
+	rts
+
+;d0=resource # in gfx
+locres:	move.l	gfx(a5),a0
+	lsl	#2,d0
+	adda.l	0(a0,d0),a0
+	lsr	#2,d0
+	rts
+inittext:	move	#$c020,4(a6)
+	moveq	#5,d0
+	bsr	sendcolors
+;	bsr	sendcolors
+;	bsr	sendcolors
+;	bsr	sendcolors
+	move.l	#$40000001,4(a6)
+	move	#512,d4
+	moveq	#5,d0
+	move	#$2000,d5
+	bsr	mapalphas
+	lea	alltext(a5),a0
+	move	#ix*28,d0
+cat:	clr	(a0)+
+	subq	#1,d0
+	bne.s	cat
+	rts
+sendtext:	move.l	#$40000003,4(a6)
+	lea	alltext(a5),a0
+	moveq	#28,d1
+stlp1:	moveq	#ix,d0
+stlp2:	move	(a0)+,(a6)
+	subq	#1,d0
+	bne.s	stlp2
+	moveq	#64-ix,d0
+stlp3:	move	#0,(a6)
+	subq	#1,d0
+	bne.s	stlp3
+	subq	#1,d1
+	bne.s	stlp1
+	rts
+
+i2a:	bsr	setup
+	move	#$c000,4(a6)
+	moveq	#0,d0
+	bsr	sendcolors
+	moveq	#1,d0
+	bsr	sendcolors
+	moveq	#2,d0
+	bsr	sendcolors
+	moveq	#3,d0
+	bsr	sendcolors
+
+	move.l	#$60000003,4(a6)
+	move	#64*32-1,d0
+bfill:	move	#$e000,(a6)
+	dbra	d0,bfill
+
+	move.l	#$40000000,4(a6)
+	moveq	#0,d4	;tile counter
+	moveq	#0,d5	;resource #
+	move	#0,d6	;color bits to or with tiles
+	lea	tilemap(a5),a2
+	lea	tmap9(pc),a3
+	bsr	remap
+	moveq	#1,d5
+	move	#$2000,d6
+	lea	objmap(a5),a2
+	lea	omap9(pc),a3
+	bsr	remap
+
+	moveq	#4,d0
+	bsr.s	mapalphas
+
+	lea	alphas+$10*2(a5),a0
+	moveq	#16,d0
+fix16:	andi	#$9fff,(a0)+
+	subq	#1,d0
+	bne.s	fix16
+
+	move.l	#$7ca00001,4(a6)
+	moveq	#12,d2
+	moveq	#15,d3
+	bsr	sendfig1
+
+	bra	smokesprite
+
+;d4=unique tile counter
+mapalphas:	move	d0,-(a7)
+	bsr	remapinit
+	move	(a7)+,d0
+	bsr	locres
+	move.b	res_width(a0),d0
+	clr	d7
+	move.b	res_height(a0),d7
+	mulu	d0,d7
+	add	d7,d7
+	lea	alphas(a5),a2
+	lea	res_array(a0),a1
+	lea	0(a1,d7),a0
+
+	move	#$2000,d6
+
+alphalp:	bsr	remap1
+	subq	#2,d7
+	bne.s	alphalp
+	clr	alphas(a5)
+
+	rts
+
+
+smokesprite:	btst	#switchbit,frame(a5)
+	beq.s	smoke1
+smoke0:	moveq	#0,d2
+	bra.s	allsmoke
+smoke1:	moveq	#3,d2
+allsmoke:	moveq	#15,d3
+	move.l	#$7dc00001,4(a6)
+	bra	sendfig1
+
+remapinit:	lea	scratch(a5),a0
+	move.l	a0,a4
+	move	#2048,d0
+	moveq	#-1,d1
+fillscr:	move.l	d1,(a0)+
+	subq	#2,d0
+	bne.s	fillscr
+	rts
+remap:	bsr.s	remapinit
+remaplp:	moveq	#0,d2
+	moveq	#0,d3
+	move.b	(a3)+,d2
+	bmi.s	remapped
+	move.b	(a3)+,d3
+	move	d5,d0
+	bsr	locres
+	moveq	#0,d7
+	move.b	res_width(a0),d7
+	mulu	d7,d3
+	add	d2,d3
+	add	d3,d3
+	move.b	res_height(a0),d2
+	mulu	d7,d2
+	add	d2,d2
+
+	lea	res_array(a0),a0
+	move.l	a0,a1
+	adda	d2,a0
+	adda	d3,a1
+
+	add	d7,d7
+	subq	#6,d7
+
+	bsr.s	remap1
+	bsr.s	remap1
+	bsr.s	remap1
+	adda	d7,a1
+	bsr.s	remap1
+	bsr.s	remap1
+	bsr.s	remap1
+	adda	d7,a1
+	bsr.s	remap1
+	bsr.s	remap1
+	bsr.s	remap1
+	bra.s	remaplp
+remapped:	rts
+;a0=start of tiles
+;a1=pointer to array
+;a4=remap table
+;d4=tile counter
+;d5=color bits to OR
+remap1:	move	(a1)+,d1
+	add	d1,d1
+	move	0(a4,d1),d0
+	bpl.s	ismapped
+	move	d4,d0
+	move	d0,0(a4,d1)
+	addq	#1,d4
+	ext.l	d1
+	lsl.l	#4,d1
+	move.l	a0,-(a7)
+	adda.l	d1,a0
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a7)+,a0
+ismapped:	or	d6,d0
+	move	d0,(a2)+
+	rts
+
+
+;a2=text of box, composed of series of lines
+;d6=x,d7=y of text display to put box
+;d4=size x, d5=size y
+;do selection, return d0=# of element selected. 0=first element
+pick:	clr	d3
+pick2:	clr	cursor(a5)
+	lea	textstack(a5),a4
+mdlp:	cmp	d5,d3
+	bcs.s	picklp
+	bsr	movedown
+	subq	#1,d3
+	bra.s	mdlp
+picklp:	bsr	makebox
+	lea	textbox(a5),a1
+	bsr	text
+	bsr	pshow
+	bsr	beep
+pickwait:	bsr	vb
+	moveq	#1<<bup+1<<bdown,d2
+	bsr	cporta
+	beq.s	pickwait
+	btst	#bup,d0
+	beq.s	nopup
+	subq	#1,d3
+	bcc.s	picklp
+	addq	#1,d3
+	tst	cursor(a5)
+	beq.s	nopup
+	move.l	-(a4),a2
+	subq	#1,cursor(a5)
+	bra.s	picklp
+nopup:	btst	#bdown,d0
+	beq.s	nobdown
+	addq	#1,d3
+	cmp	d3,d5
+	bne.s	picklp
+	subq	#1,d3
+	bsr.s	movedown
+	beq.s	pickwait
+	bra.s	picklp
+movedown:	move.l	a2,a0
+	move	d5,d0
+fcr2:	cmpi.b	#13,(a0)+
+	bne.s	fcr2
+	tst.b	(a0)
+	beq.s	nomd	nobdown
+	subq	#1,d0
+	bne.s	fcr2
+	move.l	a2,(a4)+
+fcr:	cmpi.b	#13,(a2)+
+	bne.s	fcr
+	addq	#1,cursor(a5)
+nomd:	rts
+nobdown:	btst	#buttonb,d0
+	beq.s	pickwait
+	tst.b	blackout(a5)
+	bne.s	noeraseit
+	bsr	clearbox
+	lea	textbox(a5),a1
+	bsr	text
+	bsr	pshow
+noeraseit:	bsr	beep
+;	bsr	pwait
+	move	d3,d0
+	add	cursor(a5),d0
+	rts
+
+
+clearbox:	lea	textbox(a5),a0
+cb1:	tst.b	(a0)
+	beq.s	cbdone
+	cmpi.b	#13,(a0)+
+	beq.s	cb1
+	move.b	#'@',-1(a0)
+	bra.s	cb1
+cbdone:	rts
+
+;a2=text,d4=sizex,d5=sizey. Make a text box
+;d3=line to invert
+;return d2=total # of cr's in text
+makebox:	lea	textbox(a5),a0
+	move.b	#'a',(a0)+
+	move	d4,d0
+	move.l	a0,usp
+mb1:	move.b	#'b',(a0)+
+	subq	#1,d0
+	bne.s	mb1
+	move.b	#'c',(a0)+
+	move.b	#13,(a0)+
+	move	d5,d1
+mb2:	move.b	#'d',(a0)+
+	move	d4,d0
+mb3:	move.b	#' ',(a0)+
+	subq	#1,d0
+	bne.s	mb3
+	move.b	#'f',(a0)+
+	move.b	#13,(a0)+
+	subq	#1,d1
+	bne.s	mb2
+	move.b	#'g',(a0)+
+	move	d4,d0
+mb4:	move.b	#'h',(a0)+
+	subq	#1,d0
+	bne.s	mb4
+	move.b	#'i',(a0)+
+	move.b	#13,(a0)+
+	clr.b	(a0)+
+
+	move.l	usp,a0
+
+	clr	d2
+	move.l	a2,usp
+mb5:	adda	d4,a0
+	addq	#3,a0
+	move.l	a0,a1
+mb6:	move.b	(a2)+,d0
+	cmpi.b	#13,d0
+	beq.s	mb7
+	move.b	d0,(a1)+
+	bra.s	mb6
+mb7:	cmp	d2,d3
+	bne.s	mb10
+	move.l	a0,a1
+	move	d4,d0
+mb11:	ori.b	#$80,(a1)+
+	subq	#1,d0
+	bne.s	mb11
+mb10:	addq	#1,d2
+	cmp	d2,d5
+	beq.s	mb8
+	tst.b	(a2)
+	bne.s	mb5
+	bra.s	mb9
+mb8:	tst.b	(a2)
+	beq.s	mb9
+	cmpi.b	#13,(a2)+
+	bne.s	mb8
+	addq	#1,d2
+	bra.s	mb8
+mb9:	move.l	usp,a2
+	rts
+
+zerotext:	lea	alltext(a5),a0
+	move	#ix*28,d0
+ztlp:	clr	(a0)+
+	subq	#1,d0
+	bne.s	ztlp
+	rts
+
+cleartext:	lea	alltext(a5),a0
+	move	#ix*28,d0
+	lea	alphas+'j'*2(a5),a1
+	moveq	#28/2,d1
+ctlpy:	moveq	#ix/2,d0
+ctlpx:	move	(a1),(a0)+
+	move	2(a1),(a0)+
+	move	4(a1),ix*2-4(a0)
+	move	6(a1),ix*2-2(a0)
+	subq	#1,d0
+	bne.s	ctlpx
+	adda	#ix*2,a0
+	subq	#1,d1
+	bne.s	ctlpy
+	rts
+
+;a4=text list
+manytext:	move	(a4)+,d6
+	bmi.s	manytextdone
+	move	(a4)+,d7
+	move.l	a4,a1
+	adda	(a4)+,a1
+	bsr.s	text2
+	bra.s	manytext
+manytextdone:	rts
+
+;a1=text, put at d6,d7
+text:	lea	textbox(a5),a1
+text2:	move.l	a2,-(a7)
+	lea	alltext(a5),a2
+	move	d7,d0
+	mulu	#ix2,d0
+	add	d6,d0
+	add	d6,d0
+	adda	d0,a2
+
+	lea	alphas(a5),a0
+texty:	move.l	a2,usp
+textlp:	clr	d0
+	move.b	(a1)+,d0
+	cmpi.b	#13,d0
+	beq.s	iscr
+	cmpi	#'@',d0
+	bne.s	notspc
+	clr	(a2)+
+	bra.s	textlp
+notspc:	add	d0,d0
+	move	0(a0,d0),(a2)+
+	bra.s	textlp
+iscr:	move.l	usp,a2
+	adda	#ix2,a2
+	tst.b	(a1)
+	bne.s	texty
+	move.l	(a7)+,a2
+	rts
+
+pshow:	movem.l	d0-d7/a0-a4,-(a7)
+	bsr.s	show
+	movem.l	(a7)+,d0-d7/a0-a4
+	rts
+;call me whenever screen is scrolled
+pscroll:	movem.l	d0-d7/a0-a4,-(a7)
+	bsr.s	scroll
+	movem.l	(a7)+,d0-d7/a0-a4
+	rts
+scroll:	bsr	sprites
+	bsr	putsprites
+show:	bsr	putinfo
+	move	xpos(a5),d0
+	subq	#xadj,d0
+	move	d0,xtemp2(a5)
+	move	ypos(a5),d1
+	subq	#yadj,d1
+	move	d1,ytemp2(a5)
+	muls	#bxsize,d1
+	add	d1,d0
+	lea	board(a5),a0
+	adda	d0,a0
+	adda	floor(a5),a0
+
+	lea	display(a5),a2
+	lea	tilemap(a5),a3
+	moveq	#tvy,d7
+	move	ytemp2(a5),ytemp(a5)
+mfy:	moveq	#tvx,d6
+	move	xtemp2(a5),xtemp(a5)
+mfx:	moveq	#127,d0
+	cmpi	#bxsize,xtemp(a5)
+	bcc.s	mfoutside
+	cmpi	#bysize,ytemp(a5)
+	bcc.s	mfoutside
+	tst.b	insmoke(a5)
+	bne.s	mfoutside
+	move.b	(a0),d0
+mfoutside:	addq	#1,a0
+	mulu	#18,d0
+	lea	0(a3,d0),a4
+	move	(a4)+,(a2)
+	move	(a4)+,2(a2)
+	move	(a4)+,4(a2)
+	move	(a4)+,ix2(a2)
+	move	(a4)+,ix2+2(a2)
+	move	(a4)+,ix2+4(a2)
+	move	(a4)+,ix2+ix2(a2)
+	move	(a4)+,ix2+ix2+2(a2)
+	move	(a4)+,ix2+ix2+4(a2)
+	addq	#1,xtemp(a5)
+
+	addq	#6,a2
+	subq	#1,d6
+	bne.s	mfx
+	addq	#1,ytemp(a5)
+	lea	3*ix2-6*tvx(a2),a2
+	lea	bxsize-tvx(a0),a0
+	subq	#1,d7
+	bne	mfy
+
+	bsr	senddisplay
+
+	tst.b	insmoke(a5)
+	bne.s	skipobjs
+
+	lea	objects(a5),a0
+	move	xpos(a5),d4
+	move	ypos(a5),d5
+	subq	#xadj,d4
+	subq	#yadj,d5
+	move	#maxobjects,d7
+
+showobjs:	move	obj_floor(a0),d0
+	cmp	floor(a5),d0
+	bne.s	shownextobj
+	move	obj_x(a0),d2
+	move	obj_y(a0),d3
+	sub	d4,d2
+	sub	d5,d3
+	cmpi	#tvx,d2
+	bcc.s	shownextobj
+	cmpi	#tvy,d3
+	bcc.s	shownextobj
+	mulu	#6,d2
+	mulu	#ix2*3,d3
+	add	d3,d2
+	lea	display(a5),a1
+	adda	d2,a1
+	move	obj_what(a0),d0
+	mulu	#18,d0
+	lea	objmap(a5),a2
+	adda	d0,a2
+	move	(a2)+,(a1)
+	move	(a2)+,2(a1)
+	move	(a2)+,4(a1)
+	move	(a2)+,ix2(a1)
+	move	(a2)+,ix2+2(a1)
+	move	(a2)+,ix2+4(a1)
+	move	(a2)+,ix2+ix2(a1)
+	move	(a2)+,ix2+ix2+2(a1)
+	move	(a2)+,ix2+ix2+4(a1)
+shownextobj:	lea	obj_size(a0),a0
+	subq	#1,d7
+	bne.s	showobjs
+
+skipobjs:
+
+	move.l	#$60000003,d4
+	move.l	#$00800000,d5
+
+	lea	display(a5),a2
+	moveq	#28,d7
+oshlpy:	move.l	d4,4(a6)
+	add.l	d5,d4
+	moveq	#40,d6
+oshlpx:	moveq	#0,d0
+	move	#$8000,d2
+	move	alltext-display(a2),d0
+	bne.s	texthere
+	move	(a2),d0
+	clr	d2
+texthere:	or	d2,d0
+	addq	#2,a2
+	move	d0,(a6)
+	subq	#1,d6
+	bne.s	oshlpx
+	addq	#ix2-80,a2
+	subq	#1,d7
+	bne.s	oshlpy
+	rts
+
+exit:	illegal
+
+
+r0:	equ	$2c0001
+r1:	equ	r0+2
+r2:	equ	r0+4
+r3:	equ	r0+6
+
+init:	move.b	#$93,r3
+	bset	#4,r2
+	rts
+
+ci:	btst	#0,r2
+	bne.s	ci
+	move.b	r0,d0
+	clr.b	r2
+ciwait2:	btst	#0,r2
+	beq.s	ciwait2
+	move.b	#16,r2
+	rts
+co:	move.b	#$83,r3
+	move.b	d0,r0
+	clr.b	r2
+cowait:	btst	#0,r2
+	bne.s	cowait
+	move.b	#$93,r3
+	move.b	#16,r2
+cowait2:	btst	#0,r2
+	beq.s	cowait2
+	rts
+keyready:	btst	#0,r2
+	rts
+setup:	move	#$8134,4(a6)	;*** this one also is needed
+	move	#$8f02,4(a6)	;*** this one turns refresh on?
+	move.l	#$40000000,4(a6)
+	moveq	#0,d0
+	moveq	#0,d1
+fillgfx:	move	d0,(a6)
+	subq	#2,d1
+	bne.s	fillgfx
+	lea	4(a6),a0
+	move	#$8016,(a0)
+	move	#$8134,(a0)
+	move	#$8238,(a0)	;A plane left half location
+	move	#$8338,(a0)	;A plane right half location
+	move	#$8406,(a0)	;B plane location
+	move	#$857e,(a0)	;sprite data table
+	move	#$8600,(a0)	;????
+	move	#$8700,(a0)	;Background color #
+	move	#$8801,(a0)	;????
+	move	#$8901,(a0)	;????
+	move	#$8a01,(a0)	;????
+	move	#$8b00,(a0)	;? some known
+	move	#$8c01,(a0)
+	move	#$8d34,(a0)
+	move	#$8f02,(a0)
+	move	#$9001,(a0)
+	move	#$9100,(a0)	;affects #1 division line
+	move	#$92ff,(a0)	;????
+
+h2:	clr	d4
+	move.l	#$40000010,(a0)	vertical
+	move	d4,(a6)
+	move	d4,(a6)
+	move.l	#$40000000,(a0)
+
+	lea	$c00011,a1
+	move.b	#$9f,(a1)
+	move.b	#$bf,(a1)
+	move.b	#$df,(a1)
+	move.b	#$ff,(a1)
+
+
+	rts
+
+routine:	addq	#1,clock(a5)
+	tst.b	beeptime(a5)
+	beq.s	nobeep
+	subq.b	#1,beeptime(a5)
+	bne.s	staybeep
+	move.b	#$9f,$11(a6)
+	bra.s	nobeep
+staybeep:	move.b	#$80,$11(a6)
+	move.b	#$10,$11(a6)
+	move.b	#$90,$11(a6)
+nobeep:	rte
+
+
+sprites:	moveq	#0,d6
+	lea	spritedata(a5),a3
+	move	smokenum(a5),d7
+	beq.s	nosmoke
+	tst.b	insmoke(a5)
+	bne.s	nosmoke
+	lea	smokelist(a5),a2
+smokeloop:	move	(a2)+,d0
+	move	(a2)+,d1
+	move	(a2)+,d2
+	cmp	floor(a5),d2
+	bne.s	smokeother
+	sub	xpos(a5),d0
+	sub	ypos(a5),d1
+	addq	#xadj,d0
+	addq	#yadj,d1
+	muls	#24,d0
+	muls	#24,d1
+	move	#$23ee,d2
+	bsr	asprite
+smokeother:	subq	#6,d7
+	bne.s	smokeloop
+nosmoke:	move	animnum(a5),d7
+	beq.s	sprites2
+	tst.b	insmoke(a5)
+	bne.s	sprites2
+	lea	animlist(a5),a2
+animsloop:	move	an_x(a2),d0
+	move	an_y(a2),d1
+	move	an_fig(a2),d2
+	bsr	asprite
+	lea	an_size(a2),a2
+	subq	#1,d7
+	bne.s	animsloop
+sprites2:	bsr	mantoa2
+	move.l	a2,guy(a5)
+	moveq	#numthings,d7
+	lea	things(a5),a2
+
+	move	xpos(a5),d4
+	subq	#xadj,d4
+	move	ypos(a5),d5
+	subq	#yadj,d5
+
+sprlp:	btst	#th_used,th_flags(a2)
+	beq	nextspr
+	move	th_x(a2),d0
+	move	th_y(a2),d1
+	move	th_fig(a2),d2
+	sub	d4,d0
+	sub	d5,d1
+	muls	#24,d0
+	muls	#24,d1
+	btst	#th_entity,th_flags(a2)
+	beq.s	nofixit
+	tst.b	insmoke(a5)
+	beq.s	ni
+	cmpa.l	guy(a5),a2
+	bne.s	nextspr
+ni:	tst	th_health(a2)
+	beq.s	nextspr
+;	btst	#th_exited,th_flags(a2)
+;	bne.s	nextspr
+	move	th_floor(a2),d3
+	cmp	floor(a5),d3
+	bne.s	notvis
+	bsr	isvis
+	bcs.s	thvis
+notvis:	tst	d2
+	bmi.s	nextspr
+	move	#-1,th_fig(a2)
+	andi	#$7ff,d2
+	subi	#startsprites,d2
+	ext.l	d2
+	divu	#9,d2
+	lea	figused(a5),a0
+	adda	d2,a0
+	clr.b	(a0)
+	bra.s	nextspr
+thvis:	tst	d2
+	bpl.s	nofixit
+	lea	figused(a5),a0
+	move	#startsprites,d2
+findunused:	tst.b	(a0)+
+	beq.s	foundunused
+	addi	#9,d2
+	bra.s	findunused	;probably never get to 64
+foundunused:	st	-(a0)
+	move	d2,th_fig(a2)
+	movem	d0-d1,-(a7)
+	bsr	fixthing
+	movem	(a7)+,d0-d1
+	move	th_fig(a2),d2
+nofixit:	bsr.s	asprite
+nextspr:	lea	th_size(a2),a2
+	subq	#1,d7
+	bne	sprlp
+
+	move	movenum(a5),d7
+	beq.s	nomoves
+	lea	movelist(a5),a2
+mvlp:	clr	d0
+	clr	d1
+	move.b	(a2)+,d0
+	move.b	(a2)+,d1
+	bsr	fixd0d1
+	move	#$2000+997,d2
+	bsr	asprite
+	subq	#2,d7
+	bne.s	mvlp
+nomoves:	andi	#$ff80,-6(a3)
+	move.l	a3,endsprites(a5)
+	rts
+
+fixd0d1:	move	xpos(a5),d4
+	subq	#xadj,d4
+	move	ypos(a5),d5
+	subq	#yadj,d5
+	sub	d4,d0
+	sub	d5,d1
+	muls	#24,d0
+	muls	#24,d1
+	rts
+
+
+isvis:	move	d0,d3
+	addi	#$80,d3
+	cmpi	#512,d3
+	bcc.s	isnotvis
+	move	d1,d3
+	addi	#$80,d3
+	cmpi	#384,d3
+isnotvis:	rts
+
+;d0=x,d1=y,d2=sprite #,d6=sprite counter
+asprite:	addi	#$80,d0
+	addi	#$80,d1
+	cmpi	#512,d0
+	bcc.s	nospr
+	cmpi	#384,d1
+	bcc.s	nospr
+	move	d1,(a3)+
+	addq	#1,d6
+	swap	d2
+	move	d6,d2
+	ori	#$a00,d2
+	move	d2,(a3)+
+	swap	d2
+	move	d2,(a3)+
+	move	d0,(a3)+
+nospr:	rts
+
+fixthings:	lea	things(a5),a4
+	moveq	#numthings,d7
+fixthingslp:	btst	#th_entity,th_flags(a4)
+	beq.s	fixthingsn
+	tst	th_health(a4)
+	beq.s	fixthingsn
+	tst	th_fig(a4)
+	bmi.s	fixthingsn
+	move.l	a4,a2
+	bsr.s	fixthing
+fixthingsn:	lea	th_size(a4),a4
+	subq	#1,d7
+	bne.s	fixthingslp
+	rts
+
+;a2=thing. Make its figure look correct
+fixthing:	move	th_fig(a2),d0
+	cmpi	#-1,d0
+	beq	ignore
+	andi	#$7ff,th_fig(a2)
+	ori	#$4000,th_fig(a2)
+	andi	#$7ff,d0
+	lsl	#5,d0
+	move	d0,d1
+	andi	#$c000,d1
+	eor	d1,d0
+	rol	#2,d1
+	ori	#$4000,d0
+	move	d0,4(a6)
+	move	d1,4(a6)
+	move	th_direction(a2),d0
+	moveq	#3,d2
+	mulu	d0,d2
+	moveq	#0,d3
+;	btst	#switchbit,frame(a5)
+;	beq.s	notother
+;	addq	#3,d3
+notother:	move	th_what(a2),d1
+
+	subi	#characters,d1
+	add	d1,d1
+	add	chlocs(pc,d1),d3
+;	mulu	#6,d1
+;	add	d1,d3
+	cmpi	#2*2,d1
+	bcc.s	not4
+	ori	#$2000,th_fig(a2)
+	bra	sendfig3
+not4:
+;	subi	#12,d3
+	bra	sendfig2
+
+chlocs:	dc	0	;good guys
+	dc	6	;bad guys
+	dc	0	;rex
+	dc	6	;blue dragon
+	dc	12	;blue bird
+	dc	42	;guns
+	dc	24	;westrel
+	dc	30	;tank
+	dc	36	;robot
+	dc	18	;walker
+
+sendfig3:	moveq	#3,d0
+	bra.s	sendfig
+sendfig2:	moveq	#2,d0
+	bra.s	sendfig
+sendfig1:	moveq	#1,d0
+;d2=x,d3=y,d0=resource #
+sendfig:	bsr	locres
+	move.b	res_width(a0),d0
+	clr	d1
+	move.b	res_height(a0),d1
+	add	d0,d0
+	mulu	d0,d1
+	lea	res_array(a0),a1
+	lea	0(a1,d1),a0
+	moveq	#3,d1
+	mulu	d0,d1
+	neg	d1
+	addq	#2,d1
+	mulu	d0,d3
+	add	d2,d2
+	add	d3,d2
+	adda	d2,a1
+	move.l	a0,d2
+	bsr.s	send1
+	bsr.s	send1
+	bsr.s	send1
+	adda	d1,a1
+	bsr.s	send1
+	bsr.s	send1
+	bsr.s	send1
+	adda	d1,a1
+	bsr.s	send1
+	bsr	send1
+send1:	move.l	d2,a0
+	move	(a1),d3
+	adda	d0,a1
+	lsl	#5,d3
+	adda	d3,a0
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	move.l	(a0)+,(a6)
+	rts
+
+
+putsprites2:	move.l	#$40000002,4(a6)
+;	move	#45*128+15*2,d0
+	moveq	#15,d2
+	moveq	#9,d3
+	bsr	sendfig1
+;	move	#42*128+15*2,d0
+	moveq	#15,d2
+	moveq	#6,d3
+	bra	sendfig1
+putsprites:	lea	spritedata(a5),a0
+	move.l	endsprites(a5),a1
+	move.l	#$7c000003,4(a6)
+putspriteslp:	move.l	(a0)+,(a6)
+	cmpa.l	a1,a0
+	bcs.s	putspriteslp
+	rts
+
+rnd:	move.l	seed(a5),d0
+	swap	d0
+	move.l	d0,d1
+	rol.l	#3,d1
+	eor	d0,d1
+	move	d1,d0
+	move.l	d0,seed(a5)
+	rts
+int1:	illegal
+int2:	illegal
+int3:	illegal
+int4:	rte
+	illegal
+int5:	illegal
+
+;cooked events
+;only 1 when button goes down, or when auto repeat
+;d2=bits that auto repeat
+cporta:	bsr.s	porta
+	not.b	d1
+	move.b	d2,scratch(a5)
+	and.b	d0,d2
+	beq.s	nokey
+	move.b	scratch(a5),d2
+	not.b	d2
+	and.b	d1,d2
+	and.b	d0,d2
+	bne.s	cp1
+akey:	addq.b	#1,cpcount(a5)
+	cmpi.b	#10,cpcount(a5)
+	bne.s	cp1
+	and.b	scratch(a5),d0
+	move.b	#10-4,cpcount(a5)
+	rts
+nokey:	clr.b	cpcount(a5)
+cp1:	and.b	d1,d0
+	rts
+
+anywait:	bsr.s	porta
+	beq.s	anywait
+	bsr	vb
+	bsr.s	porta
+	beq.s	anywait
+	rts
+pwait:	bsr.s	porta
+	bne.s	pwait
+	bsr	vb
+	bsr.s	porta
+	bne.s	pwait
+	rts
+porta:	lea	$a10000,a0
+	move.b	#$40,9(a0)
+	move.b	#0,3(a0)
+	moveq	#10,d1
+pa1:	dbra	d1,pa1
+	move.b	3(a0),d0
+	lsl	#2,d0
+	andi	#$c0,d0
+	move.b	#$40,3(a0)
+	moveq	#10,d1
+pa2:	dbra	d1,pa2
+	move.b	3(a0),d1
+	andi	#$3f,d1
+	or	d1,d0
+	not.b	d0
+	move.b	cpstate(a5),d1
+	move.b	d0,cpstate(a5)
+	rts
+
+beep:	move.b	#3,beeptime(a5)
+	rts
+
+sound1:	move	#1,-(a7)
+	bra.s	sound
+sound7:	move	#7,-(a7)
+	bra.s	sound
+sound8:	move	#8,-(a7)
+	bra.s	sound
+sound17:	move	#17,-(a7)
+	bra.s	sound
+sound10:	move	#10,-(a7)
+	bra.s	sound
+sound11:	move	#11,-(a7)
+	bra.s	sound
+sound3:	move	#3,-(a7)
+	bra.s	sound
+sound4:	move	#4,-(a7)
+	bra.s	sound
+sound12:	move	#12,-(a7)
+	bra.s	sound
+sound13:	move	#13,-(a7)
+	bra.s	sound
+sound14:	move	#14,-(a7)
+	bra.s	sound
+sound9:	move	#9,-(a7)
+sound:	move.l	a0,-(a7)
+	move	#$100,$a11100
+	move	#$100,$a11200
+	lea	$a00004,a0
+find0:	tst.b	(a0)+
+	bne.s	find0
+	move.b	5(a7),-(a0)
+	move	#0,$a11100
+	move.l	(a7)+,a0
+	addq	#2,a7
+	rts
+soundwait:	bsr	vb
+	move	#$100,$a11100
+	move	#$100,$a11200
+	moveq	#20,d0
+sww:	subq	#1,d0
+	bne.s	sww
+	move.b	$a00004,d2
+	move	#0,$a11100
+	tst.b	d2
+	bne.s	soundwait
+	rts
+
+z80copy:	move	#$100,$a11100
+	move	#$100,$a11200
+copy:	move.b	(a0)+,d1
+c2:	move.b	d1,(a1)
+	cmp.b	(a1),d1
+	bne.s	c2
+	addq	#1,a1
+	subq	#1,d0
+	bne.s	copy
+	rts
+
+;d0=song #
+song3:	moveq	#3,d0
+	bra.s	song
+song2:	moveq	#2,d0
+	bra.s	song
+song1:	moveq	#1,d0
+	bra.s	song
+song0:	moveq	#0,d0
+song:	move	d0,d7
+	lea	z80code2(pc),a0
+	move	#z80size2,d0
+	lea	$a00000,a1
+	bsr	z80copy
+	lea	songs(a5),a0
+	lsl	#2,d7
+	adda	d7,a0
+	move.l	(a0),a0
+	move.l	-4(a0),d0
+	bsr	z80copy
+	bra	z80go
+
+z80dl:	lea	z80code(pc),a0
+	move	#z80size,d0
+;	lea	z80code2(pc),a0
+;	move	#z80size2,d0
+	lea	$a00000,a1
+	bsr	z80copy
+	lea	$a00040,a0
+	move.l	sounddata(a5),d0
+	addq.l	#2,d0
+	move.l	d0,d1
+	ori	#$8000,d0
+	move.b	d0,(a0)+
+	ror	#8,d0
+	move.b	d0,(a0)+
+	lsr.l	#8,d1
+	lsr.l	#7,d1
+	move.b	d1,(a0)+
+
+z80go:	move	#0,$a11200
+	move	#0,$a11100
+	moveq	#9,d0
+wait:	nop
+	dbfa	d0,wait
+	move	#$100,$a11200
+	rts
+
+
+z80code:
+	z80
+
+	di
+	jmp	zentry
+;	db	9,14,14,14,3,3,3,3,3,14,3,3,3,3,14
+	db	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	db	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	db	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	db	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	db	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	db	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+zentry:	lxi	sp,$2000
+	mvi	c,8
+zi:	mvi	a,$28
+	sta	$4000
+	mov	a,c
+	dcr	a
+	sta	$4001
+	dcr	c
+	jnz	zi
+	mvi	a,$2b
+	sta	$4000
+	mvi	a,$8f
+	sta	$4001
+
+;	mvi	b,0
+;lll:	mvi	a,$2a
+;	sta	$4000
+;	mov	a,b
+;	sta	$4001
+;	inr	b
+;	mvi	c,200
+;www:	dcr	c
+;	jnz	www
+;	jmp	lll
+
+
+
+
+
+;	lxi	h,$6000
+;	xra	a
+;	mov	m,a
+;	mov	m,a
+;	mov	m,a
+;	mvi	m,1
+;	mov	m,a
+;	mov	m,a
+;	mov	m,a
+;	mov	m,a
+;	mov	m,a
+soundlp:	lda	4
+	ora	a
+	jz	soundlp
+	mov	c,a
+	call	playsound
+	lxi	h,5
+compact:	mov	a,m
+	dcx	h
+	mov	m,a
+	inx	h
+	inx	h
+	ora	a
+	jnz	compact
+	jmp	soundlp
+playsound:	lhld	$40
+	lda	$42
+	mov	b,a
+;	lxi	h,$8002
+;	mvi	b,8
+findsound2:	call	newloc
+findsound:	inx	h
+	inx	h
+	inx	h
+	inx	h
+	mov	d,m
+	inx	h
+	mov	e,m
+	inx	h
+	dcr	c
+	jz	gotsound
+	dad	d
+	mov	a,h
+	cpi	$80
+	jnc	findsound
+	inr	b
+	lxi	d,$8000
+	dad	d
+	jmp	findsound2
+gotsound:	mvi	a,$2b
+	sta	$4000
+	mvi	a,$8f
+	sta	$4001
+soundsend:	mvi	a,$2a
+	sta	$4000
+	mov	a,m
+	adi	$80
+	sta	$4001
+	inx	h
+	mov	a,h
+	ora	a
+	jnz	hlok
+	inr	b
+	call	newloc
+	mvi	h,$80
+hlok:	mvi	a,6	;12
+sw:	xthl
+	xthl
+	dcr	a
+	jnz	sw
+	dcx	d
+	mov	a,d
+	ora	e
+	jnz	soundsend
+	ret
+newloc:	mov	a,b
+	mvi	b,8
+rlp:	sta	$6000
+	rrc
+	dcr	b
+	jnz	rlp
+	mov	b,a
+	xra	a
+	sta	$6000
+	ret
+
+
+	m68000
+z80size:	equ	*-z80code
+
+z80code2:
+	z80
+	di
+	lxi	sp,sstack+64
+	jmp	mplayer
+voices:	ds	2
+sequences:	ds	2
+seqlist:	ds	2
+seqpoint:	ds	2
+vholds:	ds	6
+tempo:	ds	1
+notepoint:	ds	2
+notecount:	ds	1
+thisnote:	ds	1
+tpntr:	ds	2
+sstack:	ds	64
+
+mplayer:	lxi	h,$1000
+	shld	tpntr
+	lxi	h,songstart
+	mov	d,m
+	inx	h
+	mov	e,m
+	dad	d
+	shld	voices
+	lxi	h,songstart+2
+	mov	d,m
+	inx	h
+	mov	e,m
+	dad	d
+	shld	sequences
+	lxi	h,songstart+4
+	mov	d,m
+	inx	h
+	mov	e,m
+	dad	d
+	shld	seqlist
+beginsong:	lxi	h,$ffff
+	shld	vholds
+	shld	vholds+2
+	shld	vholds+4
+	lhld	seqlist
+	shld	seqpoint
+songlp:	lhld	seqpoint
+	mov	a,m
+	inx	h
+	mov	c,m
+	inx	h
+	shld	seqpoint
+	ora	a
+	jm	quiet
+	mov	e,a
+	mvi	d,0
+	lhld	sequences
+	dad	d
+	dad	d
+	mov	d,m
+	inx	h
+	mov	e,m
+	dad	d
+	mov	a,m
+	sta	notecount
+	inx	h
+	shld	notepoint
+	mov	a,c
+	sta	tempo
+noteloop:	mvi	c,6
+noteloop2:	lda	notecount
+	dcr	a
+	sta	notecount
+	inr	a
+	jnz	notenext
+	lhld	notepoint
+	mov	a,m
+	cpi	-1
+	jz	songlp
+	sta	thisnote
+	inx	h
+	mov	e,m	;e=instrument
+	inx	h
+	mov	a,m
+	sta	notecount
+	inx	h
+	shld	notepoint
+	lxi	h,vholds-1
+	mov	a,c
+	add	l
+	mov	l,a
+
+	push	b
+	mvi	a,6
+	sub	c
+	mvi	b,0
+	cpi	3
+	jc	aok
+	sui	3
+	mvi	b,4
+aok:	mov	c,a
+
+	mov	a,e
+	cmp	m
+	jz	sameinst
+	mov	m,a
+	mov	l,a
+	mvi	h,0
+	dad	h
+	dad	h
+	dad	h
+	dad	h
+	dad	h
+	xchg
+	lhld	voices
+	dad	d
+	mov	a,c
+	adi	$30
+	mov	c,a
+	call	sendop
+	call	sendop
+	call	sendop
+	call	sendop
+	mov	a,c
+	adi	$b0-$10-$30
+	mov	c,a
+	mov	a,m
+	inx	h
+	call	sendopb
+	mov	a,c
+	adi	4
+	mov	c,a
+	mov	a,m
+	call	sendopb
+	mov	a,c
+	sui	$b4
+	mov	c,a
+sameinst:	lda	thisnote
+	mov	e,a
+	mvi	d,0
+	lxi	h,freqs-120+24*3
+	dad	d
+	dad	d
+	mov	a,c
+	adi	$a4
+	mov	c,a
+	mov	a,m
+	inx	h
+	call	sendopb
+	mov	a,c
+	sui	4
+	mov	c,a
+	mov	a,m
+	call	sendopb
+	mov	a,c
+	adi	$28-$a0
+	mov	c,a
+	sui	$28
+	add	b
+	lxi	b,$28
+	call	sendopb
+	ori	$f0
+	call	sendopb
+
+	pop	b
+notenext:	dcr	c
+	jnz	noteloop2
+	lda	tempo
+	mov	h,a
+	mvi	l,0
+swait:	mvi	a,15
+swait2:	dcr	a
+	jnz	swait2
+	dcx	h
+	mov	a,h
+	ora	l
+	jnz	swait
+	jmp	noteloop
+;b=0 or 2,c=reg #
+sendop:	mvi	e,6
+sendoplp:	mov	a,m
+	inx	h
+	call	sendopb
+	mov	a,c
+	adi	16
+	mov	c,a
+	dcr	e
+	jnz	sendoplp
+	mov	a,c
+	sui	16*6-4
+	mov	c,a
+	ret
+sendopb:	mov	d,a
+	mov	a,b
+	ora	a
+	jnz	sendopbb
+	mov	a,c
+	sta	$4000
+	mov	a,d
+	sta	$4001
+	ret
+sendopbb:	mov	a,c
+	sta	$4002
+	mov	a,d
+	sta	$4003
+	ret
+writea:	push	h
+	lhld	tpntr
+	mov	m,a
+	inx	h
+	shld	tpntr
+	pop	h
+	ret
+quiet:	mvi	c,4
+qwait:	dcx	h
+	mov	a,h
+	ora	l
+	jnz	qwait
+	dcr	c
+	jnz	qwait
+	mvi	c,8
+qlp:	mvi	a,$28
+	sta	$4000
+	mov	a,c
+	dcr	a
+	sta	$4001
+	push	d
+	pop	d
+	dcr	c
+	jnz	qlp
+hlt:	jmp	hlt
+
+freqs:	dc	$0500,$0540,$05a0,$0600,$0640,$06c0,$0720,$0780,$07f0,$0c40,$0c80,$0cc0
+	dc	$0d00,$0d40,$0da0,$0e00,$0e40,$0ec0,$0f20,$0f80,$0ff0,$1440,$1480,$14c0
+	dc	$1500,$1540,$15a0,$1600,$1640,$16c0,$1720,$1780,$17f0,$1c40,$1c80,$1cc0
+	dc	$1d00,$1d40,$1da0,$1e00,$1e40,$1ec0,$1f20,$1f80,$1ff0,$2440,$2480,$24c0
+	dc	$2500,$2540,$25a0,$2600,$2640,$26c0,$2720,$2780,$27f0,$2c40,$2c80,$2cc0
+	dc	$2d00,$2d40,$2da0,$2e00,$2e40,$2ec0,$2f20,$2f80,$2ff0,$3440,$3480,$34c0
+	dc	$3500
+
+
+songstart:
+	m68000
+z80size2:	equ	*-z80code2
+
+
+
+
+
+
+	cnop	0,2
+chlist:	dc	ch0-chlist
+	dc	ch1-chlist
+	dc	ch2-chlist
+	dc	ch3-chlist
+	dc	ch4-chlist
+	dc	ch5-chlist
+	dc	ch6-chlist
+	dc	ch7-chlist
+	dc	ch8-chlist
+
+choices:
+ch0:	dc.b	'CANCEL',13
+ch1:	dc.b	'USE',13
+ch2:	dc.b	'CONTINUE',13
+ch3:	dc.b	'SPECIAL',13
+ch4:	dc.b	'TAKE',13
+ch5:	dc.b	'DROP',13
+ch6:	dc.b	'BEAM OUT',13
+ch7:	dc.b	'DOOR',13
+;ch8:	dc.b	'BRIEFING',13
+ch8:	dc.b	'USE LIFT',13
+	dc.b	0
+specials:	dc.b	'CANCEL',13
+	dc.b	'BRIEFING',13
+	dc.b	'ORDERS',13
+	dc.b	'MAP',13
+;	dc.b	'MAIN MENU',13
+	dc.b	'ABORT',13
+	dc.b	0
+
+
+vmh:	dc.b	'VICTORY CONDITIONS:',13,13,0
+vm0:	dc.b	'   RESCUE PRISONERS',13,0
+vp0:	dc.b	'     RESCUED ',0
+vm1:	dc.b	'   RECOVER DATAPACKS',13,0
+vp1:	dc.b	'     RECOVERED ',0
+vm2:	dc.b	'   EXIT COMBAT AREA',13,0
+vp2:	dc.b	'     REMAINING ',0
+vm3a:	dc.b	'   KILL ',0
+vm3b:	dc.b	'% OF ENEMIES',13,0
+vp3:	dc.b	'     KILLED ',0
+vm4:	dc.b	'   DESTROY DATAPACKS',13,0
+vp4:	dc.b	'     DESTROYED ',0
+vm5:	dc.b	'   OCCUPY SQUARES',13,0
+vp5:	dc.b	'     OCCUPIED ',0
+
+;	dc.b	'GOALS:',13
+;	dc.b	'RESCUE PRISONERS',13
+;	dc.b	'RECOVER DATAPACKS',13
+;	dc.b	'EXIT COMBAT AREA',13
+;	dc.b	'KILL XX% OF ENEMIES',13
+;	dc.b	'DESTROY DATAPACKS',13
+;	dc.b	'OCCUPY SQUARES',13
+;	dc.b	'PROGRESS:',13
+;	dc.b	'RESCUED 4/8 PRISONERS',13
+;	dc.b	'RECOVERED 3/10 DATAPACKS',13
+;	dc.b	'4/10 HAVE EXITED',13
+;	dc.b	'XX% OF ENEMIES KILLED',13
+;	dc.b	'4/10 DATAPACKS DESTROYED',13
+;	dc.b	'2/3 SQUARES OCCUPIED',13
+
+
+
+;		'123456789012345678901234567890'
+nocarrymsg:	dc.b	13
+	dc.b	' THIS MARINE IS NOT',13
+	dc.b	' CARRYING ANYTHING.',13
+	dc.b	0
+nomovemsg:	dc.b	'THAT MARINE DOES  ',13
+	dc.b	' NOT HAVE ENOUGH  ',13
+	dc.b	' MOVEMENT POINTS. ',13
+	dc.b	0
+noammomsg:	dc.b	'THAT MARINE IS OUT',13
+	dc.b	'OF AMMUNITION. USE',13
+	dc.b	'AN AMMO PACK.     ',13
+	dc.b	0
+noentermsg:	dc.b	13
+	dc.b	' THE MARINE CANNOT',13
+	dc.b	'  ENTER THAT SQUARE.',13
+	dc.b	0
+toomuchmsg:	dc.b	'THE MARINE''S SUIT',13
+	dc.b	' CANNOT HOLD ANY',13
+	dc.b	'  MORE CHARGES.',13
+	dc.b	0
+msg1:	dc.b	'IT COSTS ',cost_reload+'0',' MOVEMENT',13
+	dc.b	'POINTS TO USE AN',13
+	dc.b	'AMMO PACK.',13
+	dc.b	0
+msg2:	dc.b	'THE MARINE BEGAN',13
+	dc.b	'USING THE CAMO SUIT',13
+	dc.b	'AS SOON AS HE PICKED',13
+	dc.b	'IT UP.',13
+	dc.b	0
+msg3:	dc.b	'THE LAUNCHER IS USED',13
+	dc.b	' AUTOMATICALLY WHEN',13
+	dc.b	'YOU USE A ROCKET.',13
+	dc.b	0
+msg4:	dc.b	13
+	dc.b	'THERE IS NO WAY TO',13
+	dc.b	'USE THAT OBJECT.',13
+	dc.b	0
+msg5:	dc.b	'THE MARINE BEGAN',13
+	dc.b	'USING THE SHIELD',13
+	dc.b	'AS SOON AS HE PICKED',13
+	dc.b	'IT UP.',13
+	dc.b	0
+msg6:	dc.b	'THE MARINE MUST HAVE',13
+	dc.b	'A LAUNCHER TO FIRE A',13
+	dc.b	'ROCKET.',13
+	dc.b	0
+msg7:	dc.b	'IT COSTS 1',cost_launch+'0'-10,' MOVEMENT',13
+	dc.b	'POINTS TO LAUNCH A',13
+	dc.b	'ROCKET.',13
+	dc.b	0
+msg8:	dc.b	'IT COSTS ',cost_rifle+'0',' MOVEMENT',13
+	dc.b	'POINTS TO FIRE A',13
+	dc.b	'LASER RIFLE.',13
+	dc.b	0
+msg9:	dc.b	'IT COSTS ',cost_medkit+'0',' MOVEMENT',13
+	dc.b	'POINTS TO USE A',13
+	dc.b	'MEDKIT.',13
+	dc.b	0
+msg10:	dc.b	'IT COSTS ',cost_grenade+'0',' MOVEMENT',13
+	dc.b	'POINTS TO USE A',13
+	dc.b	'GRENADE.',13
+	dc.b	0
+msg11:	dc.b	'IT COSTS ',cost_neutron+'0',' MOVEMENT',13
+	dc.b	'POINTS TO USE A',13
+	dc.b	'NEUTRON BOMB.',13
+	dc.b	0
+msg12:	dc.b	'IT COSTS ',cost_smoke+'0',' MOVEMENT',13
+	dc.b	'POINTS TO USE A',13
+	dc.b	'SMOKE BOMB',13
+	dc.b	0
+msg13:	dc.b	'IT COSTS ',cost_pistol+'0',' MOVEMENT',13
+	dc.b	'POINTS TO USE A',13
+	dc.b	'LAZER PISTOL.',13
+	dc.b	0
+msg14:	dc.b	'IT COSTS ',pistolammo+'0',' AMMO',13
+	dc.b	'POINT TO USE A',13
+	dc.b	'LAZER PISTOL.',13
+	dc.b	0
+msg15:	dc.b	'IT COSTS ',rifleammo+'0',' AMMO',13
+	dc.b	'POINTS TO USE A',13
+	dc.b	'LAZER RIFLE.',13
+	dc.b	0
+msg16:	dc.b	13
+	dc.b	'THERE IS NO LIFT',13
+	dc.b	'IN THIS LOCATION.',13
+	dc.b	0
+msg17:	dc.b	'THERE IS SOMETHING',13
+	dc.b	'BLOCKING THE OTHER',13
+	dc.b	'END OF THE LIFT.',13
+	dc.b	0
+msg18:	dc.b	'IT COSTS ',cost_lift+'0',' MOVEMENT',13
+	dc.b	'POINTS TO USE A',13
+	dc.b	'LIFT.',13
+	dc.b	0
+msg19:	dc.b	'IT COSTS 1',cost_grav+'0'-10,' MOVEMENT',13
+	dc.b	'POINTS TO USE',13
+	dc.b	'GRAVSHOES.',13
+	dc.b	0
+msg20:	dc.b	'IT COSTS ',cost_door+'0',' MOVEMENT',13
+	dc.b	'POINTS TO OPEN',13
+	dc.b	'OR CLOSE A DOOR.',13
+	dc.b	0
+msg21:	dc.b	13
+	dc.b	'THERE IS NO DOOR',13
+	dc.b	'AT THAT LOCATION.',13
+	dc.b	0
+msg22:	dc.b	'THE MISSION HAS',13
+	dc.b	'FAILED. YOU CANNOT',13
+	dc.b	'POSSIBLY WIN.',13
+	dc.b	0
+msg23:	dc.b	13
+	dc.b	'YOUR SQUAD LEADER',13
+	dc.b	'HAS BEEN KILLED.',13
+	dc.b	0
+msg24:	dc.b	'THE MISSION HAS',13
+	dc.b	'BEEN COMPLETED!',13
+	dc.b	'CONGRATULATIONS!',13
+	dc.b	0
+msg25:	dc.b	'DO YOU WANT TO GO ON',13
+	dc.b	'TO THE NEXT ROUND?',13
+	dc.b	13
+	dc.b	'  а ыес        б NO',13
+	dc.b	0
+
+	cnop	0,2
+tilenames:	dc	tn1-*
+	dc	tn2-*
+	dc	tn2-*
+	dc	tn2-*
+	dc	tn2-*
+	dc	tn3-*
+	dc	tn3-*
+	dc	tn3-*
+	dc	tn3-*
+	dc	tn4-*
+	dc	tn4-*
+	dc	tn4-*
+	dc	tn4-*
+	dc	tn4-*
+	dc	tn4-*
+	dc	tn4-*
+	dc	tn5-*
+	dc	tn5-*
+	dc	tn6-*
+	dc	tn6-*
+	dc	tn6-*
+	dc	tn6-*
+	dc	tn6-*
+	dc	tn6-*
+	dc	tn6-*
+	dc	tn6-*
+	dc	tn7-*
+	dc	tn7-*
+	dc	tn7-*
+	dc	tn8-*
+	dc	tn8a-*
+	dc	tn9-*
+	dc	tn10-*
+	dc	tn11-*
+	dc	tn5-*
+	dc	tn12-*
+	dc	tn13-*
+	dc	tn13-*
+	dc	tn13-*
+	dc	tn13-*
+	dc	tn14-*
+	dc	tn15-*
+	dc	tn15-*
+	dc	tn15-*
+	dc	tn15-*
+	dc	tn15-*
+	dc	tn15-*
+	dc	tn15-*
+	dc	tn15-*
+	dc	tn15-*
+	dc	tn15-*
+	ds.b	254-(*-tilenames)
+	dc	tn16-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn17-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn18-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn19-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+	dc	tn20-*
+
+mpdata:	dc.b	2
+	dc.b	0,0,0,0	;4,4,4,4
+	dc.b	2,2,2,2
+	dc.b	2,2,3,3,4,5,5
+	dc.b	0,0,3,3,3,3,3,3,3,3
+	dc.b	0,0,0
+	dc.b	2,2,2
+	dc.b	4,4
+	dc.b	0
+	dc.b	2,4,4,4,4
+	dc.b	4
+	dc.b	3,3,3,3,3,3,3,3,3,3
+	dc.b	4,4,4,4
+	ds.b	128-(*-mpdata)
+	dc.b	0
+	dc.b	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+
+
+tn1:	dc.b	'INTERIOR',0
+tn2:	dc.b	'DOORWAY',0
+tn3:	dc.b	'DIRT',0
+tn4:	dc.b	'TREES',0
+tn5:	dc.b	'WATER',0
+tn6:	dc.b	'COAST',0
+tn7:	dc.b	'FUEL STORAGE',0
+tn8:	dc.b	'ENTRY',0
+tn8a:	dc.b	'EXIT',0
+tn9:	dc.b	'CONTROL SQUARE',0
+tn10:	dc.b	'DOWN SHUTTLE',0
+tn11:	dc.b	'UP SHUTTLE',0
+tn12:	dc.b	'HIGHLAND',0
+tn13:	dc.b	'GRADE',0
+tn14:	dc.b	'WORKER',0
+tn15:	dc.b	'STUFF',0
+tn16:	dc.b	'BLANK',0
+tn17:	dc.b	'HEAVY WALL',0
+tn18:	dc.b	'MEDIUM WALL',0
+tn19:	dc.b	'THIN WALL',0
+tn20:	dc.b	'PIPE',0
+
+;1 means grenade turns into rubble
+rubblemap:	dc.b	1,1,1,0,0,0,0,0,0,1,1,1,1,1,1,1
+	dc.b	0,0,0,0,0,0,0,0,0,0,1,1,1,0,0,0
+	dc.b	0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1
+	dc.b	1,1,1,1,1,0,0
+	ds.b	127-(*-rubblemap)
+	dc.b	0
+	dc.b	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	dc.b	1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+
+minus1:	dc.b	-1
+
+tmap9:	dc.b	3,3
+doors1s:	equ	(*-tmap9)/2
+	dc.b	6,3	thin doorway, left and right connect
+	dc.b	12,3	thin doorway, up and down connect
+	dc.b	12,0
+	dc.b	15,0
+doors1e:	equ	(*-tmap9)/2
+
+	dc.b	12,21	rocky dirt
+	dc.b	6,15	dirt, some rocks
+	dc.b	3,15	dirt,fewer rocks
+	dc.b	0,15	dirt,no rocks
+
+	dc.b	39,15	1 1/2 small trees
+	dc.b	39,9	two small trees
+	dc.b	39,12	two medium trees
+	dc.b	36,9	4 medium trees
+	dc.b	33,18	2 big trees, two small
+	dc.b	36,15	dense trees
+	dc.b	30,18	1 BIG tree
+
+waterlow:	equ	(*-tmap9)/2
+	dc.b	15,12	water1	;16
+	dc.b	18,12	water2
+	dc.b	21,12	water ul
+	dc.b	24,12	water ur
+	dc.b	27,12	water ll
+	dc.b	30,12	water lr
+	dc.b	24,15	water top
+	dc.b	27,15	water right
+	dc.b	30,15	water bottom
+	dc.b	33,15	water left
+waterhigh:	equ	(*-tmap9)/2
+
+	dc.b	33,0	left gasoline	;26
+	dc.b	36,0	middle gasoline
+	dc.b	39,0	right gasoline
+
+	dc.b	15,6	brown entry square	;29
+	dc.b	24,6	blue exit square
+	dc.b	30,6	grey occupation square
+
+	dc.b	9,15	elevator up	;32
+	dc.b	12,15	elevator down
+
+	dc.b	30,21	white rapid water
+	dc.b	24,21	white terrain
+	dc.b	0,12	rock circle ll
+	dc.b	3,12	rock circle lr
+	dc.b	6,12	rock circle ul
+	dc.b	9,12	rock circle ur
+
+	dc.b	9,3	drone
+	dc.b	33,9	energy thing
+	dc.b	36,6	keyboard and monitor
+	dc.b	33,3	tape recorder
+	dc.b	27,3	gruel empty
+	dc.b	21,3	gruel full
+	dc.b	18,6	desk
+	dc.b	12,6	metal box, long
+	dc.b	9,9	terminal, tall
+	dc.b	3,9	looks like a transformer
+	dc.b	6,6	bed
+
+doors2s:	equ	(*-tmap9)/2
+	dc.b	18,3	;open doors
+	dc.b	24,3
+	dc.b	24,0
+	dc.b	21,0
+doors2e:	equ	(*-tmap9)/2
+
+	ds.b	254-(*-tmap9)
+	dc.b	6,0
+	dc.b	0,30,3,30,6,30,9,30
+	dc.b	12,30,15,30,18,30,21,30
+	dc.b	24,30,27,30,30,30,33,30
+	dc.b	36,30,39,30,42,30,45,30
+
+	dc.b	0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0
+
+;	dc.b	0,27,3,27,6,27,9,27
+;	dc.b	12,27,15,27,18,27,21,27
+;	dc.b	24,27,27,27,30,27,33,27
+;	dc.b	36,27,39,27,42,27,45,27
+
+	dc.b	0,24,3,24,6,24,9,24
+	dc.b	12,24,15,24,18,24,21,24
+	dc.b	24,24,27,24,30,24,33,24
+	dc.b	36,24,39,24,42,24,45,24
+
+;	dc.b	0,33,3,33,6,33,9,33
+;	dc.b	12,33,15,33,18,33,21,33
+;	dc.b	24,33,27,33,30,33,33,33
+;	dc.b	36,33,39,33,42,33,45,33
+	dc.b	-1
+
+omap9:	dc.b	15,0	data pak	0
+	dc.b	18,0	hostage	1
+	dc.b	21,0	rocket launcher	2
+	dc.b	0,3	shield	3
+	dc.b	3,3	grav shoes	4
+	dc.b	6,3	neutron bomb	5
+	dc.b	9,3	nothing	6
+	dc.b	12,3	laser pistol	7
+	dc.b	15,3	laser rifle	8
+	dc.b	18,3	stun pistol	9
+	dc.b	21,3	crack unit	10
+	dc.b	0,6	detector	11
+	dc.b	3,6	medkit	12
+	dc.b	6,6	ammo pack	13
+	dc.b	9,6	proximity charge	14
+	dc.b	12,6	tablet	15
+	dc.b	21,6	shovel	16
+	dc.b	0,9	rocket	17
+	dc.b	3,9	grenade	18
+	dc.b	6,9	remote charge	19
+	dc.b	9,9	remote charge #2	20
+	dc.b	12,9	smoke bomb	21
+	dc.b	18,9	black	22	;***********
+	dc.b	21,9	off limits	23
+
+;	dc.b	0,0
+;	dc.b	0,0
+;	dc.b	0,0
+;	dc.b	0,0
+;	dc.b	0,0
+;	dc.b	0,0
+
+characters:	equ	(*-omap9)/2+6
+;	dc.b	0,48	good guys #4
+;	dc.b	0,51	bad guys #4
+;	dc.b	0,54	rex color #3
+;	dc.b	24,36	blue dragon #3
+;	dc.b	24,39	blue bird #3
+;	dc.b	24,45	guns #3
+;	dc.b	24,48	westrel #3
+;	dc.b	24,51	tank #3
+;	dc.b	24,54	robot #3
+;	dc.b	24,60	walker #3
+endch:	equ	characters+10
+
+
+	dc.b	-1
+listlist:	dc.b	0,1,2,3,4,5,6,7,8,11,12,13,15,17,18,21
+numlist:	equ	*-listlist
+	dc.b	-1
+
+	cnop	0,2
+cancelname:	dc.b	'CANCEL          '
+objnames:	dc.b	'DATA PACK       '	;done	0
+	dc.b	'HOSTAGE         '	;done	1
+	dc.b	'LAUNCHER        '	;done	2
+	dc.b	'SHIELD          '	;done	3
+	dc.b	'GRAV SHOES      '	;done	4
+	dc.b	'NEUTRON BOMB    '	;done	5
+	dc.b	'CAMO SUIT       '	;done	6
+	dc.b	'LASER PISTOL    '	;done	7
+	dc.b	'LASER RIFLE     '	;done	8
+	dc.b	'STUN PISTOL     '
+	dc.b	'CRACK UNIT      '
+	dc.b	'DETECTOR        '
+	dc.b	'MEDKIT          '	;done	12
+	dc.b	'AMMO PACK       '	;done	13
+	dc.b	'PROX CHARGE     '
+	dc.b	'TABLET          '	;done	15
+	dc.b	'FOXHOLE MAKER   '
+	dc.b	'ROCKET          '	;done	17
+	dc.b	'GRENADE         '	;done	18
+	dc.b	'REMOTE CHARGE   '
+	dc.b	'REMOTE CHARGE2  '
+	dc.b	'SMOKE BOMB      '	;done	21
+infomsg:	dc.b	'abbbbbbbbbbbbbbc'
+	dc.b	'd',$80,$80,$80,$80,$80,$80,$80,$80,$80,$80,' H99f'
+	dc.b	'd',$90,$90,$90,$90,$90,$90,$90,$90,$90,$90,' A45f'
+	dc.b	'd           M22f'
+	dc.b	'd    TIME      f'
+	dc.b	'd              f'
+	dc.b	'd              f'
+	dc.b	'ghhhhhhhhhhhhhhi'
+	dc.b	0
+names:	dc.b	'NICHOLS '
+	dc.b	'RUDOLPH '
+	dc.b	'HARVEY  '
+	dc.b	'BEAMER  '
+	dc.b	'IVANHOE '
+	dc.b	'ICEMAN  '
+	dc.b	'AESOP   '
+	dc.b	'REMIREZ '
+	dc.b	'RIPLEY  '
+
+missions:	dc.b	'RIVER CROSSING',13
+	dc.b	'ADMIRAL RESCUE',13
+	dc.b	'ENEMY LISTENING POST',13
+	dc.b	'COMM POST',13
+	dc.b	'LION TEAM',13
+	dc.b	'CRASHED',13
+	dc.b	'HOSTAGE',13
+	dc.b	'QUARTERS',13
+	dc.b	'RESCUE',13
+	dc.b	'LANDING',13
+	dc.b	0
+
+	cnop	0,2
+missiontext:	dc	11,1
+	dc	mt1-*
+
+;	dc	6,3
+;	dc	mt2-*
+
+	dc	9,21
+	dc	mt3-*
+
+	dc	24,3
+	dc	mt4-*
+
+	dc	-1
+mt1:	dc.b	'миссион═селецтион',13,0	;mission selection
+;mt2:	dc.b	'MISSIONS',13,0
+mt3:	dc.b	'миссионс═ин═прогресс',13,0	;missions in progress
+mt4:	dc.b	'сяуад═леадерс',13,0	;squad leaders
+m1text:	dc.b	'CONTINUE MISSION',13,0
+m2texta:	dc.b	'SELECT MISSION',13,0
+m2textb:	dc.b	'SELECT SQUAD LEADER',13,0
+m2textc:	dc.b	'SELECT SAVE POSITION',13,0
+m3text:	dc.b	'ABORT MISSION',13,0
+
+m4help:	dc.b	'инструцтионс',13,13
+	dc.b	'PRESS а AND ц  TO ',13
+	dc.b	'CHANGE CHARACTER. ',13
+	dc.b	'PRESS б WHEN DONE.',13
+	dc.b	0
+
+ranks:	dc.b	'EN0102030405'
+inames:	dc.b	'MIKE    '
+	dc.b	'KEVIN   '
+	dc.b	'ALEX    '
+	dc.b	'ALI     '
+	dc.b	'DAN     '
+	dc.b	'DAVE    '
+	dc.b	'RICHARD '
+	dc.b	'JON     '
+	dc.b	'ALLEN   '
+	dc.b	'IVAN    '
+m4list:	dc.b	'  ABCDEFGHIJKLMNOPQRSTUVWXYZZ'
+
+missionmenu:	dc.b	'CONTINUE MISSION',13
+	dc.b	'MAKE MISSION',13
+	dc.b	'ABORT MISSION',13
+	dc.b	'CHANGE NAMES',13
+	dc.b	0
+activelist:	dc.b	'CANCEL',13
+	dc.b	'  1',13
+	dc.b	'  2',13
+	dc.b	'  3',13
+	dc.b	0
+mmap:	dc.b	2,6,6,6,6,10,10,10,10,11,11,11,11,11,11,11
+	dc.b	13,14,15,15,15,15,15,15,15,15,2,2,2,12,13,5
+	dc.b	7,7,14,4,4,4,4,4,2,2,2,2,8,8,2,2
+	dc.b	2,2,2,2,2,2,2
+	ds.b	127-(*-mmap)
+	dc.b	7
+
+realend:	ds.b	21000-(realend-start)
+endprog:

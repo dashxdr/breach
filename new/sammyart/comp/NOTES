@@ -1,0 +1,17 @@
+Histogram:
+When there are less than 7 unique bytes in the 32 byte definition, the
+following compression can be used:
+1 byte value
+4 byte mask where used
+Thus 5xn bytes is used.
+Roughly 675/2085 tiles can benefit from this, reducing size of those tiles
+by 14190/21600.
+
+Repeats:
+When there are a lot of repeat nibbles, the following compression can be used:
+1 nibble count
+1 nibble value
+Thus 1 byte can represent up to 8 bytes.
+Useful only if there are less than 32 separate transitions.
+Roughly 1409/2085 tiles can benefit from this, reducing the size of those tiles
+by 26981/45088

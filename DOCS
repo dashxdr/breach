@@ -1,0 +1,562 @@
+Files on this disk:
+c/asm	CLI version of the assembler
+c/e	The editor/assembler
+examples/demo.a	Sample program that uses the full system
+i/INCLUDE	Amiga definitions. Put in I: (use the ASSIGN COMMAND)
+c/mr	Program to make graphics resource files
+c/musiceditor	Program to create/edit music files on the Amiga
+c/musicconvert	Program to convert music files produced with the musiceditor
+	 to the format used by the Z80 player (in demo.a)
+c/play	Program to download a rom
+examples/play.a	Program for sending commands and characters to the
+	development board. For use on the Amiga.
+c/make	Program to convert file into DC statements (1> make filename)
+c/ls	Program to take directory
+c/cd	Program to change directory
+c/mv	Program to rename a file
+c/cat	Program to type files out. ? is a wildcard.
+
+E   **********************************************************************
+CLI invocation:
+1> e filename [worksize]
+
+filename	The file you want to edit
+[worksize]	Optional byte size of workspace. The file cannot grow bigger
+	than this amount. Default is 80000 bytes, or 20000+ the size
+	of the file if it is bigger than 80000 bytes.
+Example:
+1> e test.a 100000 ;edit the file test.a, with a workspace of 100000 bytes
+
+
+The editor includes a full 68000 assembler, a partial z80 assembler (all of
+the 8080's instruction set), and interface software to communicate with the
+Development board.
+
+The editor comes up in EDIT mode, where text can be created. The arrow keys
+move the cursor around within the file, and the backspace and delete keys
+delete behind and ahead of the cursor.
+
+The escape key places the editor into COMMAND mode, where extended commands
+can be entered. Commands are separated by hitting the escape key, which
+echoes on the command line as a "|". Commands are executed when two escapes
+are hit in a row. Commands can be preceded with numbers, which causes the
+editor to repeat the command that number of times. Numbers can be signed, and
+negative numbers reverse the direction of appropriate commands.
+
+COMMANDS in COMMAND mode:
+
+b	Go to beginning of the file. RIGHT AMIGA b does this also.
+#c	change, as in "cTHIS|THAT||" will change the next occurance
+	  of THIS to THAT.
+#d	delete characters. 10d deletes the next 10 characters. -10d
+	  deletes the 10 previous characters.
+e	Save the file and exit the editor. Hit Y to verify. RIGHT
+	  AMIGA e does this also.
+#g	Go to the numbered point. These points can be defined with
+	  negative numbers. -g will set point #1 to the current cursor
+	  position. Now, the g command will place the cursor at
+	  point #1. 10 points can be defined, 0 through 9. As a
+	  shortcut, the RIGHT AMIGA and a digit can be pressed to go
+	  to the corresponding point.
+h	Set a mark for block commands. You would do an h, then move
+	  the cursor, then do another h. The block is defined. The w
+	  command duplicates the block at the current cursor position.
+	  The x command deletes the block, and moves the cursor to
+	  where it was. RIGHT AMIGA h does this also.
+i	Insert the text following the i into the file at the current
+	  cursor position, and move the cursor after it.
+#k	Delete lines ahead or behind the cursor. 0k deletes the part
+	  of the line before the cursor, and k deletes the rest of the
+	  current line and the line feed. RIGHT AMIGA k does this also.
+#l#	If the second number is specified, go to that line number.
+	  Move up or down the number of lines corresponding to the
+	  first number, and leave the cursor at the start of the line.
+	  10l will move down 10 lines. l200 will go to line 200.
+#m	Move forward or backwards the number of characters. -20m will
+	  move the cursor back 20 characters.
+o	o has two functions. o alone with nothing following writes the
+	  file out. RIGHT AMIGA o will do the same thing. o followed
+	  by a path and file name will write the text out to that file.
+	  EXAMPLE: oram:output|| writes to ram:output.
+q	Quit without saving. Hit Y to verify. RIGHT AMIGA q does this.
+r	Read in the file at the current cursor position. EXAMPLE:
+	  rram:out|| reads the file ram:out and puts it at the current
+	  cursor position.
+#s	Search for the following text. Negative numbers search in
+	  reverse.
+t	This sets the tab stops. Follow the t with a list of tab
+	  lengths. The last number is repeated. The default is
+	  t16,10||  which sets the first tab at 16 characters, and
+	  all the rest at 10.
+v	This will create a new task using the same code as the
+	  running copy of the editor, and edit a new file. EXAMPLE:
+	  vdh0:h/stdio.h|| will bring up a new window, editting the
+	  file dh0:h/stdio.h. CAUTION: The sub-editor is using the
+	  same code as the original editor. If the original editor
+	  exits, the memory will be freed, and the sub-editor will
+	  bomb. It is only safe to do if the editor is made RESIDENT.
+w	Make a copy of the current block (as defined by two h commands)
+	  and place it at the current cursor position, and move the
+	  cursor after it. RIGHT AMIGA w does this also.
+x	Delete the current block (as defined by two h commands) and
+	  locate the cursor to where it was. RIGHT AMIGA x does this.
+y	Show statistics on the file, such as number of characters,
+	  number of lines, current line. RIGHT AMIGA y does this also.
+z	Go to the end of the file. RIGHT AMIGA z does this also.
+
+#<	Open bracket, for grouping commands together
+#>	Closing bracket, for ending a group of commands. EXAMPLE:
+	  14<|s/|-m|h|l|-m|h|x|>||
+
+SPECIAL KEYS:
+RIGHT AMIGA keystrokes: (Press the RIGHT AMIGA key and the character)
+b	Go to beginning of file.
+e	Save and exit, y to verify.
+h	Set mark for block operations.
+k	Delete the rest of the line and the linefeed.
+o	Write the file out to the name specified at the CLI.
+q	Quit without saving, y to verify.
+w	Copy block to current position.
+x	Delete block.
+z	Go to end of file.
+0 Through 9	Go to the corresponding point, as defined by -#g. These
+	  points drift around as text is added or removed, but it is
+	  intuitive and predictable.
+`	The key to the left of the 1, will return to where the cursor
+	  was before the last RIGHT AMIGA 0 through 9 was hit.
+F1	Assemble the program. SEE THE SECTION ON DIRECTIVES.
+F2	Locate the cursor at the previous error.
+F3	Locate the cursor at the next error.
+F4	Capture the token at the current cursor position, scan the
+	  file I:INCLUDE to find its definition, and place an equate
+	  at the bottom of the text defining the token. SEE THE
+	  SECTION ON DIRECTIVES.
+F5	Flip to an alternate text workspace. It only has 1K. BE
+	  CAREFUL NOT TO WRITE OUT TO YOUR REAL FILE BY MISTAKE.
+	  This feature is of limited use.
+F6	Go into terminal mode communicating with the development
+	  board. Hitting ESCAPE will exit this mode. SEE THE SECTION
+	  ON TERMINAL MODE.
+F7	Flip between serial and parallel communication. This is
+	  for future upgrades, where communication is through the
+	  serial port instead of the parallel port.
+F8	Download data. load and sload commands are skipped. SEE THE
+	  SECTION ON DIRECTIVES.
+F9	Download data. load and sload commands are executed. SEE THE
+	  SECTION ON DIRECTIVES.
+F10	Locally try the file. This mimics the way AMIGADOS loads an
+	  executable. The editor allocates a stack, sets up the A0
+	  and D0 registers, does a LOADSEG, and calls the first
+	  instruction. Certain programs won't like this, namely
+	  anything that expects registers other than A0 and D0 to be
+	  initialized to some useful value. For cross development,
+	  this could cause the system to crash, if you run code meant
+	  for another system on the Amiga. EXERCISE CAUTION! SEE THE
+	  SECTION ON DIRECTIVES.
+Return key	Place a null byte in the file at the current cursor location.
+	  This is useful for separating text pieces for a ROLODEX.
+	  The default definitions for the function keys F7 to F10
+	  are useful for this. The null can be deleted with the d
+	  command in COMMAND MODE.
+
+OTHER KEYS WITHOUT RIGHT AMIGA
+Help	Show the help lines in the title bar.
+Shift F1 to F10	Define the corresponding function key as the last extended
+	  command. EXAMPLE: suppose you want F1 to search for the
+	  text "move.l". You would do "ESCAPE smove.l ESCAPE ESCAPE"
+	  then hit SHIFT F1. You will see "|smove.l||" echoed on
+	  the tile bar.
+F1 to F10	Perform the corresponding function definition.
+Control-r	Repeat the last extended command.
+Control-t	Repeat the last extended command, but reverse the direction.
+	  All searches and changes will reverse.
+
+OTHER NOTES:
+  The asterisk ("*") to the left of the filename on the title bar indicates
+whether the file has been modified since last saving.
+  In COMMAND MODE, pressing a function key will duplicate the text of that
+function. CONTROL-X will abort the line and start over.
+  The sizing gadget in the lower right corner of the window gets written over,
+in order to get one more column out of the display. It is still there, and
+its function still works.
+  From time to time messages will appear in the title bar. They will go away
+as soon as any key is hit.
+  The left mouse button will locate the cursor wherever the mouse was clicked.
+Dragging the mouse around with the button down moves the cursor around as well,
+although it is a pretty useless feature.
+
+DIRECTIVES:
+  Certain of the commands in the editor cause it to scan the text file and
+interpret certain lines, and take some action. RIGHT AMIGA F1, F8, F9 and F10
+cause this to happen.
+  Lines beginning with ";#" are directives to the editor. Following this is
+a keyword, then any parameters that keyword needs.
+DIRECTIVES ON ASSEMBLING (F1)
+;#output	path/filename    ; set the output file. Default is RAM:TEST
+;#options	[optionlist]     ; set the assembler options default is "s"
+		       ; see the ASSEMBLER DOCS
+DIRECTIVES ON DOWNLOADING, (F8 and F9)
+;#load	path/filename,location  ;download the file at the HEX location.
+;#target	location	;download the executable RAM:TEST to the HEX location.
+		;symbols are downloaded as well. NOTE THAT THE
+		;FILE IS NOT RELOCATED AS EXECUTABLES ARE ON THE
+		;AMIGA. IF IT ISN'T ADDRESS INDEPENDENT, IT CAN
+		;ONLY BE DOWNLOAD TO ADDRESS 0. ALSO THE CURRENT
+		;VERSION OF e WON'T SEND SYMBOL TABLE INFORMATION
+		;IF THERE ARE ANY HUNK_RELOC32's IN THE FILE
+		;RAM:TEST. IT IS BEST TO MAKE YOUR CODE ADDRESS
+		;INDEPENDENT.
+;#sload	path/filename  ;download the file at the current location,
+		;set from the previous download. This does a
+		;sequential download, so data files can be packed
+		;together. Before the actual file, a longword is
+		;sent over, which is the length of the file. Thus
+		;if you have lines	;#target   0
+		;		;#sload  file1
+		;		;#sload  file2
+		;memory will contain RAM:TEST, then 4 bytes of the
+		;length of file1, then file1, then 4 bytes of the
+		;length of file2, then file2. Your program can, at
+		;the start, scan this list to locate the pieces of
+		;data.
+;#end		;Stop scanning. This speeds things up if you have a
+		  ;large file. The editor won't need to scan the
+		  ;whole file looking for ;# directives.
+;#pc	location	;Set the PROGRAM COUNTER to the HEX value
+;#a7	location	;Set the STACK POINTER to the HEX value
+;#a0 through a6	location	;Set the corresponding register to the HEX value
+;#d0 through d7 location	;Set the corresponding register to the HEX value
+;#read	path/filename,location, size  ;create the file on the AMIGA
+				;end, and store in it a copy of
+				;memory from the development
+				;board, at HEX location and of
+				;HEX size bytes.
+
+ASM  *********************************************************************
+
+THE ASSEMBLER
+CLI Invokation:
+1> asm filename options
+NOTE: asm will actually read filename.a, and generate output filename.
+You should end all your assembly language files with ".a".
+
+
+The assembler is an integrated part of the editor. RIGHT AMIGA F1 invokes it,
+and the above ;#options and ;#output files may be used to specify options and
+the output file.
+
+DEFAULTS:
+The default output file is RAM:TEST. The default options are "s", which means
+include symbol table information.
+
+OPTIONS:
+NOTE: "OUTPUT" refers to the output file, which is either ram:test, or
+  whatever file was specified with a ;#output directive.
+
+a	Store out an absolute symbol table definition in the file
+	OUTPUT.s. This can be copied to I:INCLUDE, and the RIGHT AMIGA
+	F4 function can be used to put equates at the end of files for
+	common values. For example, Amiga programmers will know about
+	all the include files that Commodore expects them to use. You
+	would have to keep 300+K of include files on your disk, and
+	waste time reading them in. My solution is to assemble them all
+	once, store out the information in a compacted form, and refer
+	to it as required to define the terms. If you have INCLUDE
+	in your I: directory, you can place the cursor on a token,
+	such as "memf_public" (place the cursor on the first "m") Then
+	you can hit RIGHT AMIGA F4, and the following line will appear
+	at the end of your file:
+	     memf_public:	equ	1
+	So to use this option, assemble a file that has only EQUATES,
+	or MACROS that become EQUATES, and the definitions will be
+	stored in the OUTPUT.s. File.
+c	Assemble with CASE SENSITIVITY ON. Default is OFF, so upper
+	and lower cases are equivalent. It is best not to use this
+	option. ALL THE OP-CODES MUST BE IN LOWER CASE.
+l	Create listing file OUTPUT.l.
+o	Do not create output file. Useful for looking for errors.
+r	Suppress the Reloc32 Required error message.
+s	Include symbol table information in the output file.
+u	CLI version: Print out usage information.
+
+OP-CODES:
+Instructions can have a byte, long, or short option, as in
+	move.b	d0,d1	;move bytes
+	move.l	d0,d1	;move longs
+	bra.s	there	;branch short
+THERE CAN BE NO WORD OPTION. THE ASSEMBLER DOES NOT RECOGNIZE .W AFTER AN
+OP-CODE. THE DEFAULT IS WORD ANYWAY.
+
+In addition to all the 68000 instructions, the following codes can be used:
+	init	<expr>
+	mds	<label>,<expr>
+	nds	<label>,<expr>
+	label	<label>
+	aptr	<label>
+	bptr	<label>
+	word	<label>
+	long	<label>
+	byte	<label>
+	struct	<label>,<expr>
+	structure	<label>,<expr>
+
+The above commands mimic the MACROS defined in the AMIGA exec/types.i include
+file. They are useful for defining structures. For example, you can have a
+object structure as follows:
+	init	0	;object
+	word	xpos
+	word	ypos
+	aptr	handler
+	struct	objdata,16
+	label	objsize
+This would be just as if the following code had been executed:
+xpos:	equ	0
+ypos:	equ	2
+handler:	equ	4
+objdata:	equ	8
+objsize:	equ	24
+
+The assembler keeps a counter for structure definitions. "init" sets the
+counter to the following expression. Label defines a label to the current
+value of the counter. Word, byte, aptr, etc. define a label to the current
+value of the counter, then increment the counter by the appropriate amount.
+"mds" and "struct" define the label to the current value of the counter,
+then increment the counter by the amount of the expression. "nds" does this
+backwards: the counter is decremented by the amount of the expression, then
+the label is defined to the new value of the counter.
+"structure" defines the label to 0, and sets the counter at the value of the
+expression. This is compatible with the Amiga includes. This assembler/editor
+was originally developed for programming on the Amiga, and features still
+carry over.
+
+FURTHER OP-CODES:
+	ifeq <expr>	;assemble if expr =0
+	ifgt <expr>	;assemble if expr>0
+	iflt <expr>	;expr<0
+	ifne <expr>	;expr!=0
+	ifge <expr>	;expr>=0
+	ifle <expr>	;expr<=0
+	ifd <label>	;assemble if label is defined
+	ifnd <label>	;assemble if label is not defined
+	endc		;end conditional assembly. Can be nested.
+
+<label>	equ <expr>	;define a label to value expr
+
+	ds.b <expr>	;put expr bytes of 0's in code
+	ds <expr>		;put expr words of 0's in code. DOES NOT
+			FORCE TO EVEN ADDRESSES. IF THE PC is odd
+			before this directive, it will be odd
+			after it as well.
+	ds.l <expr>	;put expr longs of 0's in code. DOES NOT
+			FORCE TO EVEN ADDRESSES.
+
+	dc.b <datalist>	;put bytes in code. Can be ascii strings,
+			;as in dc.b  0,1,2,3,'this is a test',0
+	dc <datalist>	;put words in code. DOES NOT FORCE TO EVEN
+			;ADDRESSES
+	dc.l <datalist>	;put longs in code. DOES NOT FORCE TO EVEN
+			;ADDRESSES
+
+	cnop  expr,expr	;align PC to the 1st expression byte
+			;within the 2nd expression group.
+			;EXAMPLE: cnop 0,2 will align to EVEN
+			;cnop 1,2 will align to ODD
+			;cnop 0,4 will align to long words
+
+SWITCHING BETWEEN 68000 and Z80:
+#68000	switch to 68000 codes
+#z80	switch to z80 codes. Use INTEL instruction set, as in
+	lxi d,$1000
+	ldax b
+	stax b
+	etc.
+The assembler comes up in 68000 mode
+
+EXPRESSIONS:
+Expressions can use +,-,*,/,!,&,>>,<<, (, ), $
++	addition
+-	subtraction
+*	multiplication
+/	division
+!	Logical OR
+&	Logical AND
+$HEX	Hex constant, comprised of hex digits
+DECIMAL	Decimal constant, comprised of decimal digits
+LABEL	Symbolic constant
+* (as constant)	Substitute current value of PC. Short for "here"
+	EXAMPLE:	dc.l	*-start
+<<	Left shift
+>>	Right shift
+
+
+TERMINAL MODE
+Hitting RIGHT AMIGA F6 puts the editor into terminal mode, where it acts as
+a terminal for IO coming from the development board. Hitting ESCAPE causes
+the editor to return to EDIT mode. Within terminal mode, you have access to
+the symbolic debugger running on the development board.
+
+The "?" command prints the following help text:
+d[z] <ADDR>[,count]     Disassemble
+e[w] ADDR<,ADDR> b1...  Memory load
+f                       Flip symbols/absolute
+g <ADDR>                Begin execution
+i[i] <ADDR>             Init breakpoints
+j ADDR                  Jump to new pc
+k <NUM>                 Wait till here again
+l ADDR,ADDR b1 b2...    Search for bytes
+m START,END TO          Move memory
+n EXPR SYMBOL           Define symbol
+p <ADDR>                Set/show breakpoints
+r                       Do subroutine,return
+s                       Break after instruction
+u SYMBOL                Unname symbol
+v <ADDR<,SIZE>>         View memory
+y START,END TO          Compare memory
+z REG=EXPR REG=EXPR...  Change register
+= EXPR                  Evaluate expression
+[ or ]                  Move window left or right
+space bar               Single step
+
+Expressions can use +,-, * and /. Symbols can be used, as well as constants.
+Numbers beginning with '#' are treated as decimal, otherwise they are hex.
+@l<operand>, @w<operand>, @b<operand> can use indirect addressing. The operand
+is used as an address, and the long, word or byte at that location is used as
+the value of the expression. Example: @l0 would be the value of the long word
+at location zero.
+
+The d command disassembles code. dz disassembles in Z80. dz expr,loc sets the
+0 base of the z80 to the loc addresses.
+
+The HELP key can halt a running program if it hasn't disabled interrupts.
+This works through the vertical blank interrupt.
+
+HISTORY FEATURE:
+You can hit the arrow keys to scroll up and down in the history, so you can
+see lines that have scrolled off. In addition, you can save the history out
+to the file RAM:History by hitting alt-S.
+
+MR  ****************************************************************
+
+1> mr filename
+
+There must be a file "filename.par". The output will be "filename".
+
+MR takes the input file and interprets it as follows:
+The first line must be a number representing the total number of resource
+   entries.
+Each following line contains a resource number, a filename, an x dimension,
+   and a y dimension. EXAMPLE FILE:
+
+3
+0,pic0,16,8
+1,pic1,16,16
+2,pic2,40,28
+
+The output is of the following form:
+LONG WORD	describing offset to resource 0. offset is from start of file
+LONG WORD	describing offset to resource 1. offset is from start of file
+...
+RESOURCE
+RESOURCE
+RESOURCE
+where each RESOURCE is of the following form:
+word   numtiles		;number of unique tiles
+byte   xsize		;number of 8x8 tiles wide
+byte   ysize		;number of 8x8 tiles high
+struct colors,32	;colors, matching GENESIS COLORS (0BGR)
+struct array,xsize*ysize*2 ;array, each word telling which tile to use
+struct tiles,numtiles*32	;tile definitions, matching GENESIS format
+
+Your program can scan this file, and download to the graphics chip whatever
+data is required.
+
+MUSICEDITOR **********************************************************
+
+1> musiceditor
+
+The board must be ready to receive commands. Musiceditor downloads a program
+to the Genesis, and that writes to the Yamaha FM chip. If the link is not
+made, exit musiceditor and try again after resetting the Genesis.
+
+Along the top are up to 48 voice definitions. Click on one with the mouse to
+select a voice. Click again to edit a voice.
+
+Songs consist of patterns. A pattern can have as few as 16 steps, or as many
+as needed. A step consists of a line of notes. Each step can have 6 notes.
+Each note can have a different voice.
+
+Click on "New Pattern" to create a new pattern of length 64. "- Length +" can
+change the length. Click on either the "-" or the "+". There can be up to 99
+patterns. Select the current pattern with the "-  Wnn  +" gadget.
+
+A song is a sequence of patterns. Select the sequence number with the "- Snn +"
+gadget. There can be 99 sequences in a song. For each sequence, select the
+pattern with the "- Pnn +" gadget. Each sequence can have its own tempo, which
+can be set with the "- Tnn +" gadget.
+
+There is no way to delete patterns in this version.
+
+The "12345678" gadget can enable and disable individual channels.
+
+F1 will play the current pattern from the start.
+
+F2 will stop or continue, playing either the song or the current pattern.
+
+F3 will enable edit mode. While it is lit, changes to the pattern can be
+made. The DELETE key deletes notes. The keys on the keyboard act like a piano.
+
+Z  C 5    Q  C 6    I  C 8
+S  C#5    2  C#6
+X  D 5    W  D 6
+D  D#5    3  D#6
+C  E 5    E  E 6
+V  F 5    R  F 6
+G  F#5    5  F#6
+B  G 5    T  G 6
+H  G#5    6  G#6
+N  A 6    Y  A 7
+J  A#6    7  A#7
+M  B 6    U  B 7
+
+F5 will play the song.
+
+"Load Pattern" and "Save Pattern" load and save patterns.
+
+"Load Song" and "Save Song" load and save songs.
+
+"Load Voice" and "Save Voice" load and save voices to the currently selected
+voice.
+
+"Quiet" turns all the voices off. Note that the release rate (RR) in the voice
+edit screen for each operator must be set to some non-zero number, otherwise
+notes may not stop.
+
+The space bar plays a line of notes and moves one step down.
+
+MUSICCONVERT *********************************************************
+
+1> musicconvert infile outfile
+
+MusicConvert takes the song file from MusicEditor and creates the data file
+used by the Z80 music player (see examples/demo.a).
+
+PLAY *****************************************************************
+
+1> play filename
+
+Download file to development board, and execute it as if it were a ROM
+cartridge. If filename is a directory, play will look for the file
+filename/prom. If filename is a file, it will download that file.
+The development board must be waiting for commands, or have just been reset.
+
+
+INCLUDE **************************************************************
+
+Assign I: to some directory, and copy INCLUDE into it. Include has all the
+Amiga include definitions, for use with the RIGHT AMIGA F4. You can use the
+editor/assembler to develop utilities on the Amiga as well.
+
+EXAMPLES/ ************************************************************
+
+This contains demo.a. See the start of demo.a for a description of
+other contents, and how to put things together.

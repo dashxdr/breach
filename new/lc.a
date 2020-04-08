@@ -1,0 +1,820 @@
+;#test	ram:test /real/aliens.b2s ram:o
+;#end
+;level converter
+;this program takes a breach2 saved game file and
+;converts it
+
+
+buffersize:	equ	512
+
+exopenlibrary:	equ	$fffffdd8
+excloselibrary:	equ	$fffffe62
+dosopen:	equ	$ffffffe2
+dosclose:	equ	$ffffffdc
+dosread:	equ	$ffffffd6
+doswrite:	equ	$ffffffd0
+exfreemem:	equ	-$d2
+exallocmem:	equ	-$c6
+memf_public:	equ	1
+
+numobj:	equ	60
+numopp:	equ	60
+
+dbyte:	macro
+	bsr	abyte
+	dc.b	'\1 =',0
+	cnop	0,2
+	endm
+dword:	macro
+	bsr	aword
+	dc.b	'\1 =',0
+	cnop	0,2
+	endm
+dtext:	macro
+	moveq	#\2,d4
+	bsr	atext
+	dc.b	'\1 =',0
+	cnop	0,2
+	endm
+
+edge:	equ	50
+maxobjects:	equ	150
+;object
+	init	0
+	byte	o_x
+	byte	o_y
+	byte	o_owner	;id
+	byte	o_what
+	word	o_floor
+	label	o_size
+
+;tpout
+	init	0
+	mds	tpo_x,1
+	mds	tpo_y,1
+	mds	tpo_level,2
+	mds	tpo_tox,1
+	mds	tpo_toy,1
+	mds	tpo_tolevel,2
+	label	tpo_size
+
+;level
+	init	0
+	struct	l_levels,edge*edge*5
+	word	l_floor
+	word	l_xpos
+	word	l_ypos
+	word	l_tileoff
+	word	l_tile
+	word	l_obj
+	word	l_guy
+	word	l_oldtile
+	word	l_oldobj
+	mds	l_extra,12
+	struct	l_objects,maxobjects*o_size
+	struct	l_transporters,10*tpo_size
+	struct	l_brief,540
+	mds	l_vcond,1
+	mds	l_killpercent,1
+	mds	l_timelimit,2
+	mds	l_occupynumber,2
+	label	l_size
+
+
+
+;object
+	init	0
+	mds	obj_type,1
+	mds	obj_held,1
+	mds	obj_itext,30
+	mds	obj_x,1
+	mds	obj_y,1
+	mds	obj_level,1
+	mds	obj_pad,1
+	label	obj_size
+;opponent
+	init	0
+	mds	opp_type,1
+	mds	opp_pad,1
+	mds	opp_health,2
+	mds	opp_vitality,1
+	mds	opp_encumbrance,1
+	mds	opp_basemove,1
+	mds	opp_bonusmove,1
+	mds	opp_armor,1
+	mds	opp_gun,1
+	mds	opp_psi,1
+	mds	opp_shoot,1
+	mds	opp_x,1
+	mds	opp_y,1
+	mds	opp_level,1
+	mds	opp_facing,1
+	label	opp_size
+;marine
+	init	0
+	mds	mar_name,20
+	mds	mar_class,2
+	mds	mar_condition,2
+	mds	mar_vitality,2
+	mds	mar_encumbrance,2
+	mds	mar_maxenc,2
+	mds	mar_basemove,2
+	mds	mar_bonusmove,2
+	mds	mar_shoot,2
+	mds	mar_crack,2
+	mds	mar_detect,2
+	mds	mar_armor,2
+	mds	mar_gun,2
+	mds	mar_inventory,16
+	mds	mar_x,2
+	mds	mar_y,2
+	mds	mar_level,2
+	mds	mar_facing,2
+	mds	mar_psi,2
+	mds	mar_ammo,2
+	label	mar_size
+
+;epoint
+	init	0
+	mds	ep_x,2
+	mds	ep_y,2
+	mds	ep_level,2
+	label	ep_size
+;tpstru
+	init	0
+	mds	tp_x,2
+	mds	tp_y,2
+	mds	tp_level,2
+	mds	tp_tox,2
+	mds	tp_toy,2
+	mds	tp_tolevel,2
+	label	tp_size
+
+;ttstru
+	init	0
+	mds	tt_x,2
+	mds	tt_y,2
+	mds	tt_level,2
+	mds	tt_itext,40
+	mds	tt_read,2
+	label	tt_size
+
+;quest
+	init	0
+	mds	q_map,5*50*50
+	mds	q_vis,50*50
+	mds	q_objstru,numobj*obj_size
+	mds	q_oppstru,numopp*opp_size
+	mds	q_marstru,mar_size*10
+	mds	q_tpstru,tp_size*10
+	mds	q_ttstru,tt_size*20
+	mds	q_pentry,ep_size
+	mds	q_pexit,ep_size
+	mds	q_brieftext,540
+	mds	q_brieflen,4
+	mds	q_timelimit,4
+	mds	q_killpercent,2
+	mds	q_occupynumber,2
+	mds	q_vcond,2
+	mds	q_battles,2
+	mds	q_victories,2
+	mds	q_wartime,4
+	mds	q_kills,2
+	mds	q_lost,2
+	mds	q_slname,253
+	mds	q_skill,2
+	mds	q_slshots,2
+	mds	q_slcracks,2
+	mds	q_sldetects,2
+	mds	q_slkills,2
+	mds	q_chain,40
+	label	q_size
+
+
+	init	-$8000
+	mds	pointer,4
+	mds	length,4
+	mds	ihand,4
+	mds	ohand,4
+	mds	ibuff,buffersize
+	mds	icount,2
+	mds	ipoint,4
+	mds	obuff,buffersize
+	mds	ocount,2
+	mds	opoint,4
+	mds	xpos,2
+	mds	word1,64
+	mds	word2,64
+	mds	xlate,8
+	mds	spsave,4
+	mds	dbuff,12
+	mds	inlevel,26000
+	mds	outlevel,l_size
+	label	workspace
+
+	move.l	a0,a2
+	move.l	d0,d2
+	move.l	#workspace+$8000,d0
+	move.l	#memf_public+memf_clear,d1
+	move.l	4.w,a6
+	jsr	exallocmem(a6)
+	tst.l	d0
+	beq.s	nomem
+	move.l	d0,a5
+	suba	#$8000,a5
+
+	move.l	a2,pointer(a5)
+	move.l	d2,length(a5)
+
+	move.l	4.w,a6
+	lea	dosname(pc),a1
+	moveq	#0,d0
+	jsr	exopenlibrary(a6)
+	move.l	d0,a6
+	bsr.s	fix
+	move.l	a6,a1
+	move.l	4.w,a6
+	jsr	excloselibrary(a6)
+	move.l	a5,a1
+	adda	#$8000,a1
+	move.l	#workspace+$8000,d0
+	jsr	exfreemem(a6)
+nomem:	moveq	#0,d0
+	rts
+
+fix:	move.l	pointer(a5),a4
+	lea	word1(a5),a0
+	bsr	token
+	lea	word2(a5),a0
+	bsr	token
+	lea	word1(a5),a0
+	move.l	a0,d1
+	move.l	#1005,d2
+	jsr	dosopen(a6)
+	move.l	d0,ihand(a5)
+	beq	exit
+	lea	word2(a5),a0
+	move.l	a0,d1
+	move.l	#1006,d2
+	jsr	dosopen(a6)
+	move.l	d0,ohand(a5)
+	beq	exit2
+	bsr	init
+	move.l	a7,spsave(a5)
+	lea	inlevel(a5),a4
+	moveq	#21,d4
+toss:	bsr	ci
+	subq	#1,d4
+	bne.s	toss
+	moveq	#0,d4
+fix1:	bsr	ci
+	cmpi.b	#7,d0
+	beq.s	is7
+	lea	xlate(a5),a0
+	ext	d0
+	move.b	d4,0(a0,d0)
+is7:	addq.b	#1,d4
+	bne.s	fix1
+	moveq	#0,d7
+fixo:	moveq	#0,d5
+fix2:	bsr	getbit
+	bcs.s	exitf2
+	addq	#1,d5
+	cmpi.b	#7,d5
+	bne.s	fix2
+	bsr	getbyte
+	bsr	cox
+	bra.s	fixo
+exitf2:	lea	xlate(a5),a0
+	move.b	0(a0,d5),d0
+	bsr	cox
+	bra.s	fixo
+cox:	move.b	d0,(a4)+
+	rts
+
+
+getbyte:	moveq	#8,d4
+getbytelp:	bsr	getbit
+	roxr.b	#1,d1
+	subq	#1,d4
+	bne.s	getbytelp
+	move.b	d1,d0
+	rts
+
+getbit:	subq	#1,d7
+	bcc.s	gotbit
+	bsr	ci
+	move.b	d0,d6
+	moveq	#7,d7
+gotbit:	roxr.b	#1,d6
+	rts
+closeupshop:	move.l	spsave(a5),a7
+;level has level in it
+
+	lea	outlevel(a5),a0
+	move	#-1,l_guy(a0)
+	move	#-1,l_obj(a0)
+	lea	inlevel(a5),a4
+	lea	outlevel+l_levels(a5),a3
+	lea	tmap-18(pc),a0
+	moveq	#5,d7
+lcd:	moveq	#50,d5
+lcy:	moveq	#50,d4
+lcx:	clr	d0
+	move.b	(a4)+,d0
+	move.b	0(a0,d0),(a3)
+	adda	#50,a3
+	subq	#1,d4
+	bne.s	lcx
+	lea	1-50*50(a3),a3
+	subq	#1,d5
+	bne.s	lcy
+	lea	49*50(a3),a3
+	subq	#1,d7
+	bne.s	lcd
+
+	lea	inlevel+q_objstru(a5),a4
+	lea	outlevel+l_objects(a5),a3
+	moveq	#60,d7
+doobj:	tst.b	obj_held(a4)
+	bmi.s	onext
+	clr	d0
+	move.b	obj_type(a4),d0
+	subi.b	#9,d0
+	lsr.b	#1,d0
+	lea	omap(pc),a0
+	adda	d0,a0
+	move.b	(a0),o_what(a3)
+	move.b	obj_x(a4),o_x(a3)
+	move.b	obj_y(a4),o_y(a3)
+	move.b	obj_level(a4),d0
+	cmpi	#5,d0
+	bcs.s	lok
+	move.b	#-1,o_x(a3)
+	bra.s	lbad
+lok:	mulu	#50*50,d0
+	move	d0,o_floor(a3)
+	clr.b	o_owner(a3)
+lbad:	lea	o_size(a3),a3
+onext:	lea	obj_size(a4),a4
+	subq	#1,d7
+	bne.s	doobj
+
+characters:	equ	30
+
+	lea	inlevel+q_oppstru(a5),a4
+	moveq	#60,d7
+	moveq	#0,d1
+doopps:	clr	d0
+	move.b	opp_type(a4),d0
+	beq.s	dooppnext
+	lea	cmap-1(pc),a0
+	move.b	0(a0,d0),d0
+	addi.b	#characters,d0
+	move.b	d0,o_what(a3)
+	move.b	opp_x(a4),o_x(a3)
+	move.b	opp_y(a4),o_y(a3)
+	clr	d0
+	move.b	opp_level(a4),d0
+	mulu	#50*50,d0
+	move	d0,o_floor(a3)
+	addq	#1,d1
+	move.b	d1,o_owner(a3)
+	lea	o_size(a3),a3
+dooppnext:	lea	opp_size(a4),a4
+	subq	#1,d7
+	bne.s	doopps
+
+	lea	inlevel+q_marstru(a5),a4
+	moveq	#0,d7
+marines:	move.b	d7,o_x(a3)
+	clr.b	o_y(a3)
+	clr	o_floor(a3)
+	move.b	#characters,o_what(a3)
+	addq	#1,d1
+	move.b	d1,o_owner(a3)
+	lea	o_size(a3),a3
+
+	lea	mar_inventory(a4),a0
+	moveq	#15,d0
+marinv:	clr	d2
+	move.b	(a0)+,d2
+	beq.s	marinvnext
+	subq.b	#1,d2
+	mulu	#obj_size,d2
+	lea	inlevel+q_objstru(a5),a1
+	adda	d2,a1
+	clr.b	o_x(a3)
+	clr.b	o_y(a3)
+	move.b	d1,o_owner(a3)
+	move	#-1,o_floor(a3)
+	clr	d2
+	move.b	obj_type(a1),d2
+	subi.b	#9,d2
+	lsr.b	#1,d2
+	lea	omap(pc),a1
+	adda	d2,a1
+	move.b	(a1),o_what(a3)
+	lea	o_size(a3),a3
+marinvnext:	subq	#1,d0
+	bne.s	marinv
+
+	lea	mar_size(a4),a4
+	addq	#1,d7
+	cmpi	#9,d7
+	bne.s	marines
+
+
+	lea	outlevel+l_objects+o_size*maxobjects(a5),a2
+fillout:	move	#-1,o_x(a3)
+	move	#-1,o_floor(a3)
+	move.b	#-1,o_owner(a3)
+	move.b	#-1,o_what(a3)
+	lea	o_size(a3),a3
+	cmpa.l	a2,a3
+	bcs.s	fillout
+
+;	mds	obj_type,1
+;	mds	obj_held,1
+;	mds	obj_itext,30
+;	mds	obj_x,1
+;	mds	obj_y,1
+;	mds	obj_level,1
+;	mds	obj_pad,1
+
+;	byte	o_x
+;	byte	o_y
+;	byte	o_owner	;id
+;	byte	o_what
+;	word	o_floor
+
+
+	lea	outlevel+l_transporters(a5),a0
+	lea	inlevel+q_tpstru(a5),a1
+	moveq	#10,d4
+dotransp:	move	(a1)+,d0
+	move.b	d0,(a0)+
+	move	(a1)+,d0
+	move.b	d0,(a0)+
+	move	(a1)+,d0
+	mulu	#50*50,d0
+	move	d0,(a0)+
+	move	(a1)+,d0
+	move.b	d0,(a0)+
+	move	(a1)+,d0
+	move.b	d0,(a0)+
+	move	(a1)+,d0
+	mulu	#50*50,d0
+	move	d0,(a0)+
+	subq	#1,d4
+	bne.s	dotransp
+
+h:	lea	outlevel+l_brief(a5),a0
+	lea	inlevel+q_brieftext(a5),a1
+	move	#540,d0
+copybrief:	move.b	(a1)+,(a0)+
+	subq	#1,d0
+	bne.s	copybrief
+
+	lea	outlevel(a5),a0
+	lea	inlevel+q_vcond(a5),a1
+	moveq	#0,d0
+	moveq	#0,d1
+vcond:	tst.b	(a1)+
+	beq.s	nosetbit
+	bset	d0,d1
+nosetbit:	addq	#1,d0
+	cmpi	#7,d0
+	bne.s	vcond
+	move.b	d1,l_vcond(a0)
+
+	move	inlevel+q_killpercent(a5),d0
+	move.b	d0,l_killpercent(a0)
+
+	move	inlevel+q_occupynumber(a5),d0
+	move.b	d0,l_occupynumber(a0)
+
+	move.l	inlevel+q_timelimit(a5),d0
+	move	d0,l_timelimit(a0)
+
+;****
+
+	lea	outlevel(a5),a4
+	move	#l_size,d4
+sendout:	move.b	(a4)+,d0
+	bsr	co
+	subq	#1,d4
+	bne.s	sendout
+
+	bsr	flush
+	move.l	ohand(a5),d1
+	jsr	dosclose(a6)
+exit2:	move.l	ihand(a5),d1
+	jsr	dosclose(a6)
+exit:	rts
+
+domarine:	bsr	cr
+	dtext	mar_name,20
+	dword	mar_class
+	dword	mar_condition
+	dword	mar_vitality
+	dword	mar_encumbrance
+	dword	mar_maxenc
+	dword	mar_basemove
+	dword	mar_bonusmove
+	dword	mar_shoot
+	dword	mar_crack
+	dword	mar_detect
+	dword	mar_armor
+	dword	mar_gun
+	dbyte	mar_inventory1
+	dbyte	mar_inventory2
+	dbyte	mar_inventory3
+	dbyte	mar_inventory4
+	dbyte	mar_inventory5
+	dbyte	mar_inventory6
+	dbyte	mar_inventory7
+	dbyte	mar_inventory8
+	dbyte	mar_inventory9
+	dbyte	mar_inventory10
+	dbyte	mar_inventory11
+	dbyte	mar_inventory12
+	dbyte	mar_inventory13
+	dbyte	mar_inventory14
+	dbyte	mar_inventory15
+	addq	#1,a4
+	dword	mar_x
+	dword	mar_y
+	dword	mar_level
+	dword	mar_facing
+	dbyte	mar_psi
+	addq	#1,a4
+	dword	mar_ammo
+	rts
+
+
+	rts
+doopponent:	bsr	cr
+	dbyte	opp_type
+	addq	#1,a4
+	dword	opp_health
+	dbyte	opp_vitality
+	dbyte	opp_encumbrance
+	dbyte	opp_basemove
+	dbyte	opp_bonusmove
+	dbyte	opp_armor
+	dbyte	opp_gun
+	dbyte	opp_psi
+	dbyte	opp_shoot
+	dbyte	opp_x
+	dbyte	opp_y
+	dbyte	opp_level
+	dbyte	opp_facing
+
+
+;	bsr	abyte
+;	dc.b	'opp_type =',0
+;	cnop	0,2
+
+;	addq	#1,a4
+;	bsr	aword
+;	dc.b	'opp_health =',0
+;	cnop	0,2
+;
+;	bsr	abyte
+;	dc.b	'opp_vitality =',0
+;	cnop	0,2
+;
+;	bsr	abyte
+;	dc.b	'opp_encumbrance =',0
+;	cnop	0,2
+;
+;	bsr	abyte
+;	dc.b	'opp_basemove =',0
+;	cnop	0,2
+;
+;	bsr	abyte
+;	dc.b	'opp_bonusmove =',0
+;	cnop	0,2
+;
+;	bsr	abyte
+;	dc.b	'opp_armor =',0
+;	cnop	0,2
+;
+;	bsr	abyte
+;	dc.b	'opp_gun =',0
+;	cnop	0,2
+;
+;	bsr	abyte
+;	dc.b	'opp_psi =',0
+;	cnop	0,2
+
+
+	rts
+
+noobject:	lea	obj_size(a4),a4
+	rts
+doobject:	tst.b	obj_held(a4)
+	bmi.s	noobject
+	bsr	cr
+	bsr	abyte
+	dc.b	'obj_type =',0
+	cnop	0,2
+
+	bsr	abyte
+	dc.b	'obj_held =',0
+	cnop	0,2
+
+	moveq	#30,d4
+	bsr	atext
+	dc.b	'obj_itext =',0
+	cnop	0,2
+
+	bsr	abyte
+	dc.b	'obj_x =',0
+	cnop	0,2
+
+	bsr	abyte
+	dc.b	'obj_y =',0
+	cnop	0,2
+
+	bsr	abyte
+	dc.b	'obj_level =',0
+	cnop	0,2
+
+	addq	#1,a4
+	rts
+aword:	bsr	string
+	moveq	#0,d2
+	move	(a4)+,d2
+	bsr	deco
+	bra	cr
+abyte:	bsr	string
+	moveq	#0,d2
+	move.b	(a4)+,d2
+	bsr	deco
+	bra	cr
+atext:	bsr	string
+atextlp:	move.b	(a4)+,d0
+	andi	#$7f,d0
+	cmpi	#$20,d0
+	bcc.s	d0ok
+	moveq	#'.',d0
+d0ok:	bsr	co
+	subq	#1,d4
+	bne.s	atextlp
+	bra	cr
+string:	move.l	4(a7),a2
+strlp:	move.b	(a2)+,d0
+	beq.s	strdone
+	bsr	co
+	bra.s	strlp
+strdone:	addq	#1,a2
+	move.l	a2,4(a7)
+	andi	#$fffe,6(a7)
+	rts
+
+;d2=num
+deco:	lea	dbuff+8(a5),a1
+	clr.b	-(a1)
+decolp:	divu	#10,d2
+	swap	d2
+	addi.b	#'0',d2
+	move.b	d2,-(a1)
+	clr	d2
+	swap	d2
+	bne.s	decolp
+decolp2:	move.b	(a1)+,d0
+	beq.s	decodone
+	bsr	co
+	bra.s	decolp2
+decodone:	rts
+
+
+
+cr:	moveq	#10,d0
+	bra	co
+hexout:	move	d0,d1
+	ror.b	#4,d0
+	bsr.s	digit
+	move	d1,d0
+digit:	andi	#$f,d0
+	move.b	digits(pc,d0),d0
+	bra	co
+digits:	dc.b	'0123456789ABCDEF'
+hexcomp:	moveq	#0,d0
+hexcomplp:	move.b	(a0)+,d1
+	subi.b	#'0',d1
+	bcs.s	hexcompdone
+	cmpi.b	#10,d1
+	bcs.s	decdigit
+	subi.b	#'a'-'0'-10,d1
+	cmpi.b	#10,d1
+	bcs.s	hexcompdone
+	cmpi.b	#16,d1
+	bcc.s	hexcompdone
+decdigit:	lsl.l	#4,d0
+	or.b	d1,d0
+	bra.s	hexcomplp
+hexcompdone:	rts
+
+init:	lea	obuff(a5),a0
+	move.l	a0,opoint(a5)
+	clr	ocount(a5)
+	clr	icount(a5)
+	rts
+ci4:	bsr.s	ci2
+	swap	d0
+ci2:	bsr.s	ci
+	rol	#8,d0
+ci:	tst	icount(a5)
+	bne.s	stillmorein
+	movem.l	d0-d3,-(a7)
+	move.l	ihand(a5),d1
+	lea	ibuff(a5),a0
+	move.l	a0,ipoint(a5)
+	move.l	a0,d2
+	move.l	#buffersize,d3
+	jsr	dosread(a6)
+	move	d0,icount(a5)
+	beq.s	exitci
+	movem.l	(a7)+,d0-d3
+stillmorein:	subq	#1,icount(a5)
+	move.l	ipoint(a5),a0
+	move.b	(a0)+,d0
+	move.l	a0,ipoint(a5)
+	rts
+exitci:	movem.l	(a7)+,d0-d3
+	bra	closeupshop
+co4:	swap	d0
+	bsr.s	co2
+	swap	d0
+co2:	rol	#8,d0
+	bsr.s	co
+	rol	#8,d0
+co:	cmpi	#buffersize,ocount(a5)
+	bne.s	stillnotfull
+	bsr.s	flush
+stillnotfull:	move.l	opoint(a5),a0
+	move.b	d0,(a0)+
+	move.l	a0,opoint(a5)
+	addq	#1,ocount(a5)
+	rts
+
+flush:	movem.l	d0-d3/a1,-(a7)
+	move.l	ohand(a5),d1
+	lea	obuff(a5),a0
+	move.l	a0,opoint(a5)
+	move.l	a0,d2
+	move	ocount(a5),d3
+	clr	ocount(a5)
+	ext.l	d3
+	jsr	doswrite(a6)
+	movem.l	(a7)+,d0-d3/a1
+	rts
+
+;a4=point,store at a0
+token:	move.b	(a4)+,d0
+	cmpi.b	#' ',d0
+	beq.s	token
+	cmpi.b	#9,d0
+	beq.s	token
+	subq	#1,a4
+	moveq	#60,d2
+tokenlp:	move.b	(a4)+,d0
+	beq.s	tokendone
+	cmpi.b	#' ',d0
+	beq.s	tokendone
+	cmpi.b	#9,d0
+	beq.s	tokendone
+	cmpi.b	#10,d0
+	beq.s	tokendone
+	subq	#1,d2
+	bmi.s	tokenlp
+	move.b	d0,(a0)+
+	bra.s	tokenlp
+tokendone:	clr.b	(a0)+
+	subq	#1,a4
+	rts
+messagelp:	bsr	co
+message:	move.b	(a2)+,d0
+	bne.s	messagelp
+	rts
+
+tmap:	dc.b	128,128,128,128,128,128,128,128,160,160,160,160,160,160,160,160
+	dc.b	33,32,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,46,0,0,43,0,50,42,49,0,0,26,27
+	dc.b	28,48,40,47,127,0,0,16,17,18,19,20,21,36,37,38
+	dc.b	39,35,7,9,0,5,11,12,14,29,30,31,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	dc.b	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+omap:	dc.b	0,1,2,21,3,4,5,6,7,8,9,10,11,12,13,14
+	dc.b	15,16,17,18,19
+
+cmap:	dc.b	2,1,3,4,5,6,7,8,9
+
+dosname:	dc.b	'dos.library',0
+memf_clear:	equ	$10000

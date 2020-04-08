@@ -1,0 +1,293 @@
+;program does various compressions on the output of mrt
+
+buffersize:	equ	512
+
+	init	0
+	nds	pointer,4
+	nds	length,4
+	nds	ihand,4
+	nds	ohand,4
+	nds	ibuff,buffersize
+	nds	icount,2
+	nds	ipoint,4
+	nds	obuff,buffersize
+	nds	ocount,2
+	nds	opoint,4
+	nds	xpos,2
+	nds	store,64
+	nds	scratch,256
+	nds	runl,2
+	nds	runa,2
+	nds	runt,2
+	nds	word1,64
+	nds	word2,64
+	label	workspace
+
+	link	a5,#workspace
+	move.l	a0,pointer(a5)
+	move.l	d0,length(a5)
+
+	move.l	4.w,a6
+	lea	dosname(pc),a1
+	moveq	#0,d0
+	jsr	exopenlibrary(a6)
+	move.l	d0,a6
+	bsr.s	fix
+	move.l	a6,a1
+	move.l	4.w,a6
+	jsr	excloselibrary(a6)
+	unlk	a5
+	moveq	#0,d0
+	rts
+
+fix:	move.l	pointer(a5),a4
+	lea	word1(a5),a0
+	bsr	token
+	lea	word2(a5),a0
+	bsr	token
+	lea	word1(a5),a0
+	move.l	a0,d1
+	move.l	#1005,d2
+	jsr	dosopen(a6)
+	move.l	d0,ihand(a5)
+	beq	exit
+	lea	word2(a5),a0
+	move.l	a0,d1
+	move.l	#1006,d2
+	jsr	dosopen(a6)
+	move.l	d0,ohand(a5)
+	beq	exit2
+	bsr	init
+	clr	runl(a5)
+	clr	runa(a5)
+	clr	runt(a5)
+fixlp:	moveq	#32,d4
+	lea	store(a5),a4
+f2:	bsr	ci
+	beq	closeupshop
+	move	d0,d1
+	ror	#4,d1
+	andi	#15,d1
+	move.b	d1,(a4)+
+	andi	#15,d0
+	move.b	d0,(a4)+
+	subq	#1,d4
+	bne.s	f2
+	addq	#1,runa(a5)
+
+hist:	lea	scratch(a5),a4
+	move.l	a4,a0
+	moveq	#0,d0
+cs:	clr.b	(a0)+
+	subq.b	#1,d0
+	bne.s	cs
+
+	lea	store(a5),a3
+	moveq	#32,d7
+	clr	d6
+hlp:	clr	d0
+	move.b	(a3)+,d0
+	rol.b	#4,d0
+	or.b	(a3)+,d0
+
+	tst.b	0(a4,d0)
+	bne.s	hnext
+	st	0(a4,d0)
+	addq	#1,d6
+hnext:	subq	#1,d7
+	bne.s	hlp
+	move	d6,d0
+	cmpi	#7,d0
+	bcc.s	fixlp
+	addq	#1,runl(a5)
+	add	d0,runt(a5)
+	bra.s	fixlp
+
+
+;no compression
+nocomp:	moveq	#64,d7
+	lea	store(a5),a4
+ooo:	move.b	(a4)+,d0
+	bsr	digit
+	subq	#1,d7
+	bne.s	ooo
+	moveq	#10,d0
+	bsr	co
+	bra	fixlp
+
+;1 nibble count, 1 nibble value, max 8 to 1 compression
+repeat:
+	lea	scratch(a5),a3
+
+	moveq	#0,d6
+	moveq	#64,d7
+	lea	store(a5),a4
+complp:	moveq	#1,d4
+	move.b	(a4)+,d5
+cd:	subq	#1,d7
+	beq.s	compdone
+c2:	cmp.b	(a4),d5
+	beq.s	c3
+	bsr	send1
+	bra.s	complp
+c3:	addq	#1,a4
+	addq	#1,d4
+	cmpi	#16,d4
+	bne.s	cd
+	bsr	send1
+	subq	#1,d7
+	beq.s	compdone2
+	bra.s	complp
+
+compdone:	bsr	send1
+compdone2:	cmpi	#32,d6
+	bcc	fixlp
+	add	d6,runt(a5)
+	addq	#1,runl(a5)
+	bra	fixlp
+send1:	addq	#1,d6
+	rol.b	#4,d4
+	or.b	d5,d4
+	move.b	d4,(a3)+
+	rts
+
+closeupshop:	move.b	runl(a5),d0
+	bsr	hexout
+	move.b	runl+1(a5),d0
+	bsr	hexout
+	moveq	#',',d0
+	bsr	co
+	move.b	runa(a5),d0
+	bsr	hexout
+	move.b	runa+1(a5),d0
+	bsr	hexout
+	moveq	#',',d0
+	bsr	co
+	move.b	runt(a5),d0
+	bsr	hexout
+	move.b	runt+1(a5),d0
+	bsr	hexout
+	moveq	#10,d0
+	bsr	co
+	bsr	flush
+	move.l	ohand(a5),d1
+	jsr	dosclose(a6)
+exit2:	move.l	ihand(a5),d1
+	jsr	dosclose(a6)
+exit:	rts
+hexout:	move	d0,d1
+	ror.b	#4,d0
+	bsr.s	digit
+	move	d1,d0
+digit:	andi	#$f,d0
+	move.b	digits(pc,d0),d0
+	bra	co
+digits:	dc.b	'0123456789ABCDEF'
+
+hexcomp:	moveq	#0,d0
+hexcomplp:	move.b	(a0)+,d1
+	subi.b	#'0',d1
+	bcs.s	hexcompdone
+	cmpi.b	#10,d1
+	bcs.s	decdigit
+	subi.b	#'a'-'0'-10,d1
+	cmpi.b	#10,d1
+	bcs.s	hexcompdone
+	cmpi.b	#16,d1
+	bcc.s	hexcompdone
+decdigit:	lsl.l	#4,d0
+	or.b	d1,d0
+	bra.s	hexcomplp
+hexcompdone:	rts
+
+init:	lea	obuff(a5),a0
+	move.l	a0,opoint(a5)
+	clr	ocount(a5)
+	clr	icount(a5)
+	rts
+ci4:	bsr.s	ci2
+	swap	d0
+ci2:	bsr.s	ci
+	rol	#8,d0
+ci:	tst	icount(a5)
+	bne.s	stillmorein
+	movem.l	d0-d3,-(a7)
+	move.l	ihand(a5),d1
+	lea	ibuff(a5),a0
+	move.l	a0,ipoint(a5)
+	move.l	a0,d2
+	move.l	#buffersize,d3
+	jsr	dosread(a6)
+	move	d0,icount(a5)
+	beq.s	exitci
+	movem.l	(a7)+,d0-d3
+stillmorein:	subq	#1,icount(a5)
+	move.l	ipoint(a5),a0
+	move.b	(a0)+,d0
+	move.l	a0,ipoint(a5)
+	rts
+exitci:	movem.l	(a7)+,d0-d3
+	rts
+co4:	swap	d0
+	bsr.s	co2
+	swap	d0
+co2:	rol	#8,d0
+	bsr.s	co
+	rol	#8,d0
+co:	cmpi	#buffersize,ocount(a5)
+	bne.s	stillnotfull
+	bsr.s	flush
+stillnotfull:	move.l	opoint(a5),a0
+	move.b	d0,(a0)+
+	move.l	a0,opoint(a5)
+	addq	#1,ocount(a5)
+	rts
+
+flush:	movem.l	d0-d3,-(a7)
+	move.l	ohand(a5),d1
+	lea	obuff(a5),a0
+	move.l	a0,opoint(a5)
+	move.l	a0,d2
+	move	ocount(a5),d3
+	clr	ocount(a5)
+	ext.l	d3
+	jsr	doswrite(a6)
+	movem.l	(a7)+,d0-d3
+	rts
+
+;a4=point,store at a0
+token:	move.b	(a4)+,d0
+	cmpi.b	#' ',d0
+	beq.s	token
+	cmpi.b	#9,d0
+	beq.s	token
+	subq	#1,a4
+	moveq	#60,d2
+tokenlp:	move.b	(a4)+,d0
+	beq.s	tokendone
+	cmpi.b	#' ',d0
+	beq.s	tokendone
+	cmpi.b	#9,d0
+	beq.s	tokendone
+	cmpi.b	#10,d0
+	beq.s	tokendone
+	subq	#1,d2
+	bmi.s	tokenlp
+	move.b	d0,(a0)+
+	bra.s	tokenlp
+tokendone:	clr.b	(a0)+
+	subq	#1,a4
+	rts
+messagelp:	bsr	co
+message:	move.b	(a2)+,d0
+	bne.s	messagelp
+	rts
+
+dosname:	dc.b	'dos.library',0
+
+exopenlibrary:	equ	$fffffdd8
+excloselibrary:	equ	$fffffe62
+dosopen:	equ	$ffffffe2
+dosclose:	equ	$ffffffdc
+dosread:	equ	$ffffffd6
+doswrite:	equ	$ffffffd0
